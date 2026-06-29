@@ -9,7 +9,7 @@ import os
 # 1. PAGE CONFIGURATION & UI STYLING
 # ==========================================
 st.set_page_config(
-    page_title="BMKG Diurnal Meteorological Dashboard",
+    page_title="TNI AU Diurnal Meteorological Dashboard",
     page_icon="🌤️",
     layout="wide",
     initial_sidebar_state="expanded"
