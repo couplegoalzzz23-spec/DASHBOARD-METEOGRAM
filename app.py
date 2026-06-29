@@ -313,6 +313,13 @@ elif selected_param == "Wind":
             '29-30-31': 'Barat Laut (WNW)', '32-33-34': 'Barat Laut (NNW)'
         }
         
+        # PERBAIKAN: Urutan baku kompas meteorologi (Searah jarum jam)
+        compass_order = [
+            'Utara (N)', 'Timur Laut (NNE)', 'Timur Laut (ENE)', 'Timur (E)',
+            'Tenggara (ESE)', 'Tenggara (SSE)', 'Selatan (S)', 'Barat Daya (SSW)',
+            'Barat Daya (WSW)', 'Barat (W)', 'Barat Laut (WNW)', 'Barat Laut (NNW)'
+        ]
+        
         # Filter out CALM & VARIABLE for Polar chart
         rose_df = df_w[~df_w['Direction'].isin(['CALM', 'VARIABLE'])].copy()
         
@@ -333,6 +340,19 @@ elif selected_param == "Wind":
                                color_discrete_sequence=px.colors.sequential.Plasma_r,
                                title="Distribusi Arah dan Kecepatan Angin (Knots)",
                                template="plotly_white")
+            
+            # PERBAIKAN: Konfigurasi Sumbu Polar/Angular agar sesuai standar WMO (Utara di Atas)
+            fig.update_layout(
+                polar=dict(
+                    angularaxis=dict(
+                        direction="clockwise",       # Berputar searah jarum jam
+                        categoryorder="array",       # Memaksa Plotly mengikuti urutan array kita
+                        categoryarray=compass_order, # Array arah yang sudah disiapkan di atas
+                        rotation=90                  # Memutar sumbu agar elemen pertama (Utara) berada persis di atas (90 derajat)
+                    )
+                )
+            )
+            
             st.plotly_chart(fig, use_container_width=True)
             
         # Tampilkan data kondisi CALM dan VARIABLE
