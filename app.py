@@ -188,7 +188,7 @@ def filter_df(df):
 # ==========================================
 st.markdown("""
     <div class="bmkg-header">
-        <h1>Stasiun Klimatologi BMKG - Analisis Diurnal & Frekuensi Cuaca</h1>
+        <h1>Metac_IDAF - Analisis Diurnal & Frekuensi Cuaca</h1>
         <p>Sistem Ekstraksi Otomatis & Visualisasi Data Permukaan Historis 2021-2025</p>
     </div>
 """, unsafe_allow_html=True)
