@@ -155,7 +155,7 @@ with st.spinner("Membaca dan menstrukturisasi ulang data Excel WMO..."):
 # ==========================================
 # 4. SIDEBAR & FILTERING
 # ==========================================
-st.sidebar.image("https://www.bmkg.go.id/asset/img/logo/logo-bmkg.png", width=90)
+st.sidebar.image("https://www.bmkg.go.id/asset/img/logo/logo-TNI AU.png", width=90)
 st.sidebar.markdown("<h2 style='color:white; margin-top:10px;'>Navigasi Data</h2>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
