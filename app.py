@@ -275,18 +275,22 @@ elif selected_param == "Visibility":
         # Melt untuk grafik fluktuasi/meteogram
         hm_df = agg_v.melt(id_vars='Jam', value_vars=cols, var_name='Kategori_Vis', value_name='Frekuensi')
         
-        # Gradasi warna elegan menggunakan sampling dari Tealgrn
-        palette = px.colors.sample_colorscale("Tealgrn", [0.15 + 0.85*(i/(len(cols)-1)) for i in range(len(cols))])
+        # PERBAIKAN: Gunakan palet warna kontras tinggi yang sangat mencolok agar mudah dibaca saat garis menumpuk
+        vibrant_palette = [
+            "#D32F2F", "#1976D2", "#388E3C", "#F57C00", 
+            "#7B1FA2", "#0097A7", "#E64A19", "#5D4037", "#111111"
+        ]
         
         fig = px.line(hm_df, x='Jam', y='Frekuensi', color='Kategori_Vis', markers=True,
                       title=f"Meteogram Fluktuasi Frekuensi Jarak Pandang - {month_choice} ({selected_year})",
                       labels={'Jam': 'Jam Synoptic (UTC)', 'Frekuensi': 'Frekuensi Kejadian (%)', 'Kategori_Vis': 'Batas Visibilitas (m)'},
-                      color_discrete_sequence=palette)
+                      color_discrete_sequence=vibrant_palette)
         
-        fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
+        fig.update_traces(line=dict(width=3), marker=dict(size=7))
         fig.update_layout(
             hovermode="x unified",
-            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1, range=[-0.5, 23.5]),
+            yaxis=dict(rangemode='tozero', gridcolor='#E0E0E0'),
             legend=dict(title="Kategori Visibilitas", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
         )
         st.plotly_chart(add_watermark(fig), use_container_width=True)
@@ -301,18 +305,21 @@ elif selected_param == "Cloud Base (HS)":
         agg_hs = df_hs.groupby('Jam')[cols].mean().reset_index().sort_values('Jam')
         hm_df = agg_hs.melt(id_vars='Jam', value_vars=cols, var_name='Kategori_HS', value_name='Frekuensi')
         
-        # Gradasi warna elegan menggunakan sampling dari PuBu / Blues
-        palette = px.colors.sample_colorscale("PuBu", [0.3 + 0.7*(i/(len(cols)-1)) for i in range(len(cols))])
+        # PERBAIKAN: Gunakan palet warna kontras tinggi yang sangat mencolok agar mudah dibaca saat garis menumpuk
+        vibrant_palette_hs = [
+            "#E65100", "#1E88E5", "#00897B", "#8E24AA", "#C2185B", "#37474F"
+        ]
         
         fig = px.line(hm_df, x='Jam', y='Frekuensi', color='Kategori_HS', markers=True,
                       title=f"Meteogram Fluktuasi Frekuensi Tinggi Dasar Awan - {month_choice} ({selected_year})",
                       labels={'Jam': 'Jam Synoptic (UTC)', 'Frekuensi': 'Frekuensi Kejadian (%)', 'Kategori_HS': 'Tinggi Awan (ft)'},
-                      color_discrete_sequence=palette)
+                      color_discrete_sequence=vibrant_palette_hs)
         
-        fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
+        fig.update_traces(line=dict(width=3), marker=dict(size=7))
         fig.update_layout(
             hovermode="x unified",
-            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1, range=[-0.5, 23.5]),
+            yaxis=dict(rangemode='tozero', gridcolor='#E0E0E0'),
             legend=dict(title="Kategori Ceiling (ft)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
         )
         st.plotly_chart(add_watermark(fig), use_container_width=True)
