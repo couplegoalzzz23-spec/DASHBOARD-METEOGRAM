@@ -263,38 +263,58 @@ elif selected_param == "RH":
         st.plotly_chart(add_watermark(fig), use_container_width=True)
 
 elif selected_param == "Visibility":
-    st.subheader("Heatmap Frekuensi Jarak Pandang (Visibility)")
+    st.subheader("Meteogram Fluktuasi Diurnal Jarak Pandang (Visibility)")
     df_v = filter_df(data['Vis'])
     if df_v.empty:
         st.warning("Data Visibilitas tidak ditemukan.")
     else:
-        # Rata-rata persentase frekuensi per jam
+        # Rata-rata persentase frekuensi per jam dan pastikan terurut jam 0-23
         cols = ['<200', '<400', '<600', '<800', '<1500', '<1800', '<3000', '<5000', '<8000']
-        agg_v = df_v.groupby('Jam')[cols].mean().reset_index()
+        agg_v = df_v.groupby('Jam')[cols].mean().reset_index().sort_values('Jam')
         
-        # Melt untuk Heatmap
+        # Melt untuk grafik fluktuasi/meteogram
         hm_df = agg_v.melt(id_vars='Jam', value_vars=cols, var_name='Kategori_Vis', value_name='Frekuensi')
         
-        fig = px.density_heatmap(hm_df, x='Jam', y='Kategori_Vis', z='Frekuensi',
-                                 histfunc='avg', color_continuous_scale='YlGnBu',
-                                 title="Distribusi Persentase Frekuensi Jarak Pandang Berdasarkan Jam UTC")
-        fig.update_layout(yaxis={'categoryorder':'array', 'categoryarray': cols[::-1]})
+        # Gradasi warna elegan menggunakan sampling dari Tealgrn
+        palette = px.colors.sample_colorscale("Tealgrn", [0.15 + 0.85*(i/(len(cols)-1)) for i in range(len(cols))])
+        
+        fig = px.line(hm_df, x='Jam', y='Frekuensi', color='Kategori_Vis', markers=True,
+                      title=f"Meteogram Fluktuasi Frekuensi Jarak Pandang - {month_choice} ({selected_year})",
+                      labels={'Jam': 'Jam Synoptic (UTC)', 'Frekuensi': 'Frekuensi Kejadian (%)', 'Kategori_Vis': 'Batas Visibilitas (m)'},
+                      color_discrete_sequence=palette)
+        
+        fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
+        fig.update_layout(
+            hovermode="x unified",
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            legend=dict(title="Kategori Visibilitas", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+        )
         st.plotly_chart(add_watermark(fig), use_container_width=True)
 
 elif selected_param == "Cloud Base (HS)":
-    st.subheader("Heatmap Frekuensi Tinggi Dasar Awan (HS)")
+    st.subheader("Meteogram Fluktuasi Diurnal Tinggi Dasar Awan (Ceiling)")
     df_hs = filter_df(data['HS'])
     if df_hs.empty:
         st.warning("Data Cloud Base tidak ditemukan.")
     else:
         cols = ['<150', '<200', '<300', '<500', '<1000', '<1500']
-        agg_hs = df_hs.groupby('Jam')[cols].mean().reset_index()
+        agg_hs = df_hs.groupby('Jam')[cols].mean().reset_index().sort_values('Jam')
         hm_df = agg_hs.melt(id_vars='Jam', value_vars=cols, var_name='Kategori_HS', value_name='Frekuensi')
         
-        fig = px.density_heatmap(hm_df, x='Jam', y='Kategori_HS', z='Frekuensi',
-                                 histfunc='avg', color_continuous_scale='Blues',
-                                 title="Persentase Kumulatif Ketinggian Dasar Awan Berdasarkan Jam UTC")
-        fig.update_layout(yaxis={'categoryorder':'array', 'categoryarray': cols[::-1]})
+        # Gradasi warna elegan menggunakan sampling dari PuBu / Blues
+        palette = px.colors.sample_colorscale("PuBu", [0.3 + 0.7*(i/(len(cols)-1)) for i in range(len(cols))])
+        
+        fig = px.line(hm_df, x='Jam', y='Frekuensi', color='Kategori_HS', markers=True,
+                      title=f"Meteogram Fluktuasi Frekuensi Tinggi Dasar Awan - {month_choice} ({selected_year})",
+                      labels={'Jam': 'Jam Synoptic (UTC)', 'Frekuensi': 'Frekuensi Kejadian (%)', 'Kategori_HS': 'Tinggi Awan (ft)'},
+                      color_discrete_sequence=palette)
+        
+        fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
+        fig.update_layout(
+            hovermode="x unified",
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            legend=dict(title="Kategori Ceiling (ft)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+        )
         st.plotly_chart(add_watermark(fig), use_container_width=True)
 
 elif selected_param == "Wind":
