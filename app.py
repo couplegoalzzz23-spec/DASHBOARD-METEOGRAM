@@ -37,6 +37,8 @@ MONTHS_ID = [
 # ==========================================
 # 2. SMART DATA PARSERS (ROBUST EXTRACTION)
 # ==========================================
+# Algoritma ini didesain untuk membaca format laporan legacy BMKG yang kompleks
+
 def parse_hourly_freq(df, col_names):
     """Membaca tabel frekuensi per jam (Visibilitas, Cloud Base, Temp)."""
     valid_data = []
@@ -44,6 +46,7 @@ def parse_hourly_freq(df, col_names):
         try:
             val0 = str(row.iloc[0]).strip()
             val1 = str(row.iloc[1]).strip()
+            # Cek jika kolom 0 adalah jam (0-23) dan kolom 1 adalah tahun
             if val0.replace('.','',1).isdigit() and val1.isdigit():
                 hr = float(val0)
                 yr = float(val1)
@@ -54,6 +57,7 @@ def parse_hourly_freq(df, col_names):
     if not valid_data: return pd.DataFrame()
     parsed_df = pd.DataFrame(valid_data).iloc[:, :len(col_names)]
     parsed_df.columns = col_names
+    # Convert all except year to float
     for c in col_names:
         parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
     return parsed_df
@@ -65,6 +69,7 @@ def parse_3hourly(df):
         try:
             val0 = str(row.iloc[0]).strip()
             val1 = str(row.iloc[1]).strip()
+            # Kolom 0 = Tahun, Kolom 1 = Tanggal (1-31)
             if val0.isdigit() and val1.isdigit():
                 yr = float(val0)
                 dt = float(val1)
@@ -89,7 +94,7 @@ def parse_wind(df):
     
     for idx, row in df.iterrows():
         val0 = str(row.iloc[0]).strip()
-        val1 = str(row.iloc[1]).strip().replace(' ', '')
+        val1 = str(row.iloc[1]).strip().replace(' ', '') # Hapus spasi agar seragam
         
         if val0.isdigit() and len(val0) == 4:
             current_year = int(val0)
@@ -189,6 +194,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 kpi_cols = st.columns(4)
+# Calculate quick KPIs based on available filtered data
 with kpi_cols[0]:
     t_df = filter_df(data['TempMaxMin'])
     val = f"{t_df['Mean'].mean():.1f} °C" if not t_df.empty else "N/A"
@@ -212,44 +218,34 @@ with kpi_cols[3]:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
-# 6. VISUALIZATIONS (UPGRADED METEOGRAMS)
+# 6. VISUALIZATIONS
 # ==========================================
-def style_meteogram(fig):
-    """Memberikan sentuhan styling modern yang elegan untuk meteogram."""
-    fig.update_layout(
-        margin=dict(l=20, r=20, t=50, b=40),
-        template="plotly_white",
-        hovermode="x unified",
-        plot_bgcolor="#FFFFFF",
-        paper_bgcolor="#FFFFFF",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor="#F0F2F5")
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor="#F0F2F5")
+def add_watermark(fig):
+    fig.update_layout(margin=dict(l=20, r=20, t=50, b=50), template="plotly_white")
     return fig
 
 if selected_param == "Temperature":
-    st.subheader("🌡️ Meteogram Suhu Udara Synoptic (3-Jam-an UTC)")
+    st.subheader("Pola Suhu Udara Synoptic (3-Jam-an UTC)")
     df_t = filter_df(data['TempMaxMin'])
     if df_t.empty:
         st.warning("Data Suhu belum/tidak diunggah.")
     else:
+        # Melt data untuk merubah format kolom jam menjadi baris agar mudah di-plot
         df_melt = df_t.melt(id_vars=['Tahun', 'Bulan_Idx', 'Tanggal'], 
                             value_vars=['00', '03', '06', '09', '12', '15', '18', '21'],
                             var_name='Jam_UTC', value_name='Suhu')
+        
+        # Hitung rerata berdasarkan Jam
         agg_df = df_melt.groupby('Jam_UTC')['Suhu'].mean().reset_index()
         
-        # Area chart berdampingan dengan kurva halus (Spline)
-        fig = px.area(agg_df, x='Jam_UTC', y='Suhu', markers=True, 
-                      title=f"Kurva Fluktuasi Suhu Diurnal - {month_choice} ({selected_year})",
+        fig = px.line(agg_df, x='Jam_UTC', y='Suhu', markers=True, 
+                      title=f"Kurva Suhu Diurnal - {month_choice} ({selected_year})",
                       labels={'Jam_UTC': 'Jam Synoptic (UTC)', 'Suhu': 'Temperatur (°C)'})
-        fig.update_traces(line=dict(color='#D32F2F', width=3, shape='spline'),
-                          fillcolor='rgba(211, 47, 47, 0.12)',
-                          marker=dict(size=8, color='#B71C1C'))
-        st.plotly_chart(style_meteogram(fig), use_container_width=True)
+        fig.update_traces(line=dict(color='#E53935', width=3))
+        st.plotly_chart(add_watermark(fig), use_container_width=True)
 
 elif selected_param == "RH":
-    st.subheader("💧 Meteogram Kelembapan Relatif (RH) Synoptic")
+    st.subheader("Pola Kelembapan Relatif (RH) Synoptic")
     df_r = filter_df(data['RH'])
     if df_r.empty:
         st.warning("Data RH belum/tidak diunggah.")
@@ -259,79 +255,75 @@ elif selected_param == "RH":
                             var_name='Jam_UTC', value_name='RH')
         agg_df = df_melt.groupby('Jam_UTC')['RH'].mean().reset_index()
         
-        fig = px.area(agg_df, x='Jam_UTC', y='RH', markers=True,
-                      title=f"Kurva Fluktuasi RH Diurnal - {month_choice} ({selected_year})",
+        fig = px.line(agg_df, x='Jam_UTC', y='RH', markers=True,
+                      title=f"Kurva RH Diurnal - {month_choice} ({selected_year})",
                       labels={'Jam_UTC': 'Jam Synoptic (UTC)', 'RH': 'Kelembapan (%)'})
-        fig.update_traces(line=dict(color='#0288D1', width=3, shape='spline'),
-                          fillcolor='rgba(2, 136, 209, 0.15)',
-                          marker=dict(size=8, color='#01579B'))
-        fig.update_layout(yaxis=dict(range=[min(40, agg_df['RH'].min()*0.9), 105]))
-        st.plotly_chart(style_meteogram(fig), use_container_width=True)
+        fig.update_traces(line=dict(color='#1E88E5', width=3))
+        fig.update_layout(yaxis=dict(range=[40, 105]))
+        st.plotly_chart(add_watermark(fig), use_container_width=True)
 
 elif selected_param == "Visibility":
-    st.subheader("🌫️ Meteogram & Profil Frekuensi Jarak Pandang (Visibility)")
+    st.subheader("Meteogram Fluktuasi Diurnal Jarak Pandang (Visibility)")
     df_v = filter_df(data['Vis'])
     if df_v.empty:
         st.warning("Data Visibilitas tidak ditemukan.")
     else:
+        # Rata-rata persentase frekuensi per jam dan pastikan terurut jam 0-23
         cols = ['<200', '<400', '<600', '<800', '<1500', '<1800', '<3000', '<5000', '<8000']
-        agg_v = df_v.groupby('Jam')[cols].mean().reset_index()
+        agg_v = df_v.groupby('Jam')[cols].mean().reset_index().sort_values('Jam')
+        
+        # Melt untuk grafik fluktuasi/meteogram
         hm_df = agg_v.melt(id_vars='Jam', value_vars=cols, var_name='Kategori_Vis', value_name='Frekuensi')
         
-        col1, col2 = st.columns([3, 2])
-        with col1:
-            # Meteogram fluktuasi interaktif per jam
-            fig_met = px.bar(hm_df, x='Jam', y='Frekuensi', color='Kategori_Vis',
-                             barmode='group',
-                             color_discrete_sequence=px.colors.sequential.Tealgrn_r,
-                             title="📈 Fluktuasi Diurnal Frekuensi Jarak Pandang per Jam UTC",
-                             labels={'Jam': 'Jam (UTC)', 'Frekuensi': 'Frekuensi (%)', 'Kategori_Vis': 'Batas Vis (m)'})
-            st.plotly_chart(style_meteogram(fig_met), use_container_width=True)
-            
-        with col2:
-            # Heatmap dengan gradasi elegan ber-kontras tinggi (Viridis)
-            fig_hm = px.density_heatmap(hm_df, x='Jam', y='Kategori_Vis', z='Frekuensi',
-                                        histfunc='avg', color_continuous_scale='Viridis',
-                                        title="Matriks Profil Intensitas")
-            fig_hm.update_layout(yaxis={'categoryorder':'array', 'categoryarray': cols[::-1]},
-                                 margin=dict(l=10, r=10, t=50, b=40))
-            st.plotly_chart(fig_hm, use_container_width=True)
+        # Gradasi warna elegan menggunakan sampling dari Tealgrn
+        palette = px.colors.sample_colorscale("Tealgrn", [0.15 + 0.85*(i/(len(cols)-1)) for i in range(len(cols))])
+        
+        fig = px.line(hm_df, x='Jam', y='Frekuensi', color='Kategori_Vis', markers=True,
+                      title=f"Meteogram Fluktuasi Frekuensi Jarak Pandang - {month_choice} ({selected_year})",
+                      labels={'Jam': 'Jam Synoptic (UTC)', 'Frekuensi': 'Frekuensi Kejadian (%)', 'Kategori_Vis': 'Batas Visibilitas (m)'},
+                      color_discrete_sequence=palette)
+        
+        fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
+        fig.update_layout(
+            hovermode="x unified",
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            legend=dict(title="Kategori Visibilitas", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+        )
+        st.plotly_chart(add_watermark(fig), use_container_width=True)
 
 elif selected_param == "Cloud Base (HS)":
-    st.subheader("☁️ Meteogram & Profil Tinggi Dasar Awan (Ceiling HS)")
+    st.subheader("Meteogram Fluktuasi Diurnal Tinggi Dasar Awan (Ceiling)")
     df_hs = filter_df(data['HS'])
     if df_hs.empty:
         st.warning("Data Cloud Base tidak ditemukan.")
     else:
         cols = ['<150', '<200', '<300', '<500', '<1000', '<1500']
-        agg_hs = df_hs.groupby('Jam')[cols].mean().reset_index()
+        agg_hs = df_hs.groupby('Jam')[cols].mean().reset_index().sort_values('Jam')
         hm_df = agg_hs.melt(id_vars='Jam', value_vars=cols, var_name='Kategori_HS', value_name='Frekuensi')
         
-        col1, col2 = st.columns([3, 2])
-        with col1:
-            # Meteogram fluktuasi interaktif area/garis
-            fig_met = px.line(hm_df, x='Jam', y='Frekuensi', color='Kategori_HS', markers=True,
-                              color_discrete_sequence=px.colors.sequential.Deep_r,
-                              title="📈 Fluktuasi Ketinggian Dasar Awan per Jam UTC",
-                              labels={'Jam': 'Jam (UTC)', 'Frekuensi': 'Frekuensi (%)', 'Kategori_HS': 'Tinggi Awan (ft)'})
-            fig_met.update_traces(line=dict(width=2.5, shape='spline'), marker=dict(size=6))
-            st.plotly_chart(style_meteogram(fig_met), use_container_width=True)
-            
-        with col2:
-            # Heatmap kontras tinggi
-            fig_hm = px.density_heatmap(hm_df, x='Jam', y='Kategori_HS', z='Frekuensi',
-                                        histfunc='avg', color_continuous_scale='Deep',
-                                        title="Matriks Distribusi Ketinggian")
-            fig_hm.update_layout(yaxis={'categoryorder':'array', 'categoryarray': cols[::-1]},
-                                 margin=dict(l=10, r=10, t=50, b=40))
-            st.plotly_chart(fig_hm, use_container_width=True)
+        # Gradasi warna elegan menggunakan sampling dari PuBu / Blues
+        palette = px.colors.sample_colorscale("PuBu", [0.3 + 0.7*(i/(len(cols)-1)) for i in range(len(cols))])
+        
+        fig = px.line(hm_df, x='Jam', y='Frekuensi', color='Kategori_HS', markers=True,
+                      title=f"Meteogram Fluktuasi Frekuensi Tinggi Dasar Awan - {month_choice} ({selected_year})",
+                      labels={'Jam': 'Jam Synoptic (UTC)', 'Frekuensi': 'Frekuensi Kejadian (%)', 'Kategori_HS': 'Tinggi Awan (ft)'},
+                      color_discrete_sequence=palette)
+        
+        fig.update_traces(line=dict(width=2.5), marker=dict(size=6))
+        fig.update_layout(
+            hovermode="x unified",
+            xaxis=dict(tickmode='linear', tick0=0, dtick=1),
+            legend=dict(title="Kategori Ceiling (ft)", orientation="v", yanchor="top", y=1, xanchor="left", x=1.02)
+        )
+        st.plotly_chart(add_watermark(fig), use_container_width=True)
 
 elif selected_param == "Wind":
-    st.subheader("🧭 Mawar Angin (Wind Rose) Multi-sektor")
+    st.subheader("Mawar Angin (Wind Rose) Multi-sektor")
     df_w = filter_df(data['Wind'])
     if df_w.empty:
         st.warning("Data Wind tidak ditemukan.")
     else:
+        # Konversi nama sektor agar lebih cantik
         dir_map = {
             '35-36-01': 'Utara (N)', '02-03-04': 'Timur Laut (NNE)',
             '05-06-07': 'Timur Laut (ENE)', '08-09-10': 'Timur (E)',
@@ -341,21 +333,27 @@ elif selected_param == "Wind":
             '29-30-31': 'Barat Laut (WNW)', '32-33-34': 'Barat Laut (NNW)'
         }
         
+        # PERBAIKAN: Urutan baku kompas meteorologi (Searah jarum jam)
         compass_order = [
             'Utara (N)', 'Timur Laut (NNE)', 'Timur Laut (ENE)', 'Timur (E)',
             'Tenggara (ESE)', 'Tenggara (SSE)', 'Selatan (S)', 'Barat Daya (SSW)',
             'Barat Daya (WSW)', 'Barat (W)', 'Barat Laut (WNW)', 'Barat Laut (NNW)'
         ]
         
+        # Filter out CALM & VARIABLE for Polar chart
         rose_df = df_w[~df_w['Direction'].isin(['CALM', 'VARIABLE'])].copy()
         
         if not rose_df.empty:
             rose_df['Direction_Label'] = rose_df['Direction'].map(dir_map)
+            
+            # Melt speed bins
             speed_cols = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45']
             melted_rose = rose_df.melt(id_vars=['Direction_Label'], value_vars=speed_cols, 
                                        var_name='Speed_Knot', value_name='Frequency')
             
+            # Aggregate to get means if multiple years/months selected
             agg_rose = melted_rose.groupby(['Direction_Label', 'Speed_Knot'])['Frequency'].mean().reset_index()
+            # Buang frekuensi 0 agar tidak membebani render Plotly
             agg_rose = agg_rose[agg_rose['Frequency'] > 0]
             
             fig = px.bar_polar(agg_rose, r="Frequency", theta="Direction_Label", color="Speed_Knot",
@@ -363,20 +361,22 @@ elif selected_param == "Wind":
                                title="Distribusi Arah dan Kecepatan Angin (Knots)",
                                template="plotly_white")
             
+            # PERBAIKAN: Konfigurasi Sumbu Polar/Angular agar sesuai standar WMO (Utara di Atas)
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
-                        direction="clockwise",
-                        categoryorder="array",
-                        categoryarray=compass_order,
-                        rotation=90
+                        direction="clockwise",       # Berputar searah jarum jam
+                        categoryorder="array",       # Memaksa Plotly mengikuti urutan array kita
+                        categoryarray=compass_order, # Array arah yang sudah disiapkan di atas
+                        rotation=90                  # Memutar sumbu agar elemen pertama (Utara) berada persis di atas (90 derajat)
                     )
-                ),
-                margin=dict(l=20, r=20, t=50, b=40)
+                )
             )
+            
             st.plotly_chart(fig, use_container_width=True)
             
+        # Tampilkan data kondisi CALM dan VARIABLE
         calm_df = df_w[df_w['Direction'].isin(['CALM', 'VARIABLE'])]
         if not calm_df.empty:
             st.caption("Catatan Kondisi Khusus:")
-            st.dataframe(calm_df.groupby('Direction')['Total'].mean().reset_index().rename(columns={'Total': 'Persentase Kejadian (%)'}), use_container_width=True)
+            st.dataframe(calm_df.groupby('Direction')['Total'].mean().reset_index().rename(columns={'Total': 'Persentase Kejadian (%)'}))
