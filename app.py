@@ -38,7 +38,7 @@ MONTHS_ID = [
 ]
 
 # ==========================================
-# 2. SMART DATA PARSERS 
+# 2. SMART DATA PARSERS (BUG FIXED)
 # ==========================================
 def parse_synoptic(df):
     valid_rows = []
@@ -49,10 +49,13 @@ def parse_synoptic(df):
             if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()): continue
             v0, v1 = float(val0), float(val1)
             
+            # FIX KRITIKAL: Tangani desimal berkoma pada seluruh nilai observasi agar tidak lenyap menjadi NaN
+            rest_vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[2:].values]
+            
             if 2000 <= v0 <= 2100 and 1 <= v1 <= 31:
-                valid_rows.append([int(v0), int(v1)] + list(row.iloc[2:].values))
+                valid_rows.append([int(v0), int(v1)] + rest_vals)
             elif 1 <= v0 <= 31 and 2000 <= v1 <= 2100:
-                valid_rows.append([int(v1), int(v0)] + list(row.iloc[2:].values))
+                valid_rows.append([int(v1), int(v0)] + rest_vals)
         except Exception: continue
             
     if not valid_rows: return pd.DataFrame()
@@ -72,8 +75,6 @@ def parse_synoptic(df):
         return pd.DataFrame()
             
     for c in parsed_df.columns:
-        # PERBAIKAN FATAL: Menghapus .fillna(0) agar data tetap otentik dan akurat.
-        # Nilai kosong/tidak ada (NaN) tidak boleh direpresentasikan sebagai 0 dlm standar WMO.
         parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce')
     return parsed_df
 
@@ -86,17 +87,19 @@ def parse_hourly_freq(df, col_names):
             if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()): continue
             v0, v1 = float(val0), float(val1)
             
+            # FIX KRITIKAL
+            rest_vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[2:].values]
+            
             if 0 <= v0 <= 23 and 2000 <= v1 <= 2100:
-                valid_data.append([int(v0), int(v1)] + list(row.iloc[2:].values))
+                valid_data.append([int(v0), int(v1)] + rest_vals)
             elif 2000 <= v0 <= 2100 and 0 <= v1 <= 23:
-                valid_data.append([int(v1), int(v0)] + list(row.iloc[2:].values))
+                valid_data.append([int(v1), int(v0)] + rest_vals)
         except Exception: continue
             
     if not valid_data: return pd.DataFrame()
     parsed_df = pd.DataFrame(valid_data).iloc[:, :len(col_names)]
     parsed_df.columns = col_names[:len(parsed_df.columns)]
     for c in parsed_df.columns:
-        # PERBAIKAN FATAL
         parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce')
     return parsed_df
 
@@ -121,7 +124,8 @@ def parse_wind(df):
             if target_dir:
                 yr = int(val0) if (val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100) else current_year
                 
-                vals = [str(x).replace(',', '.') for x in row.iloc[start_col_idx:].values]
+                # FIX KRITIKAL
+                vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[start_col_idx:].values]
                 valid_data.append([yr, target_dir] + vals)
         except Exception: continue
             
@@ -131,7 +135,6 @@ def parse_wind(df):
     parsed_df = parsed_df.iloc[:, :len(expected_cols)]
     parsed_df.columns = expected_cols[:len(parsed_df.columns)]
     for c in parsed_df.columns[2:]: 
-        # PERBAIKAN FATAL
         parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce')
     return parsed_df
 
@@ -238,7 +241,7 @@ with kpi_cols[3]:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
-# 6. ENGINE VISUALISASI TUNGGAL
+# 6. ENGINE VISUALISASI TUNGGAL (UI HOVER DIPERBAIKI)
 # ==========================================
 def apply_wmo_style(fig, title_text, x_label, y_label):
     fig.update_layout(
@@ -258,7 +261,7 @@ def apply_wmo_style(fig, title_text, x_label, y_label):
 st.markdown(f"### 📊 Visualisasi Data {param_options[selected_param].split('. ')[1]}")
 st.markdown("---")
 
-# KELOMPOK 1: DATA SYNOPTIC (Tampil Semua Kolom yg Tersedia, Termasuk Max & Min)
+# KELOMPOK 1: DATA SYNOPTIC
 if selected_param in ["TempMaxMin", "RH"]:
     df_filtered = filter_df(data[selected_param])
     if df_filtered.empty: 
@@ -271,16 +274,18 @@ if selected_param in ["TempMaxMin", "RH"]:
         avail_cols = [c for c in plot_cols if c in df_filtered.columns]
         
         agg_df = df_filtered.groupby('Tanggal')[avail_cols].mean().reset_index().sort_values('Tanggal')
-        melted = agg_df.melt(id_vars='Tanggal', value_vars=avail_cols, var_name='Variabel Observasi', value_name='Nilai')
+        
+        # Penamaan ulang kolom untuk estetika hover
+        melted = agg_df.melt(id_vars='Tanggal', value_vars=avail_cols, var_name='Jam / Indikator', value_name='Nilai')
         
         fig_line = px.line(
-            melted, x='Tanggal', y='Nilai', color='Variabel Observasi', 
+            melted, x='Tanggal', y='Nilai', color='Jam / Indikator', 
             markers=True, color_discrete_sequence=px.colors.qualitative.Alphabet
         )
-        fig_line.update_traces(line=dict(width=2), marker=dict(size=6))
+        # FIX VISUAL: Menghilangkan redundansi string (contoh: "Variabel Observasi=09") menjadi format ringkas dan profesional
+        fig_line.update_traces(line=dict(width=2), marker=dict(size=6), hovertemplate="<b>%{y}</b>")
         fig_line = apply_wmo_style(fig_line, f"Grafik Harian {param_name} - {month_choice} ({selected_year})", "Tanggal", y_label)
         
-        # PERBAIKAN TANGGAL: Mengunci Sumbu X murni hanya dari 1 hingga maksimal akhir bulan (menghapus 0 dan 32)
         max_tanggal = int(agg_df['Tanggal'].max()) if not agg_df.empty else 31
         fig_line.update_layout(
             xaxis=dict(
@@ -291,7 +296,7 @@ if selected_param in ["TempMaxMin", "RH"]:
         )
         st.plotly_chart(fig_line, use_container_width=True)
 
-# KELOMPOK 2: DATA DISTRIBUSI FREKUENSI (Berdasarkan Jam)
+# KELOMPOK 2: DATA DISTRIBUSI FREKUENSI
 elif selected_param in ["TempFreq", "Vis", "HS"]:
     df_filtered = filter_df(data[selected_param])
     if df_filtered.empty: 
@@ -309,10 +314,12 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
             
         avail_cols = [c for c in cols if c in df_filtered.columns]
         agg_v = df_filtered.groupby('Jam')[avail_cols].mean().reset_index().sort_values('Jam')
-        hm_df = agg_v.melt(id_vars='Jam', value_vars=avail_cols, var_name='Kategori Parameter', value_name='Persentase Frekuensi (%)')
+        hm_df = agg_v.melt(id_vars='Jam', value_vars=avail_cols, var_name='Kategori', value_name='Persentase')
         
-        fig_line = px.line(hm_df, x='Jam', y='Persentase Frekuensi (%)', color='Kategori Parameter', markers=True, color_discrete_sequence=PALET_KATEGORI)
-        fig_line.update_traces(line=dict(width=3), marker=dict(size=8))
+        fig_line = px.line(hm_df, x='Jam', y='Persentase', color='Kategori', markers=True, color_discrete_sequence=PALET_KATEGORI)
+        
+        # FIX VISUAL: Membuat hover bersih hanya angka persentase
+        fig_line.update_traces(line=dict(width=3), marker=dict(size=8), hovertemplate="<b>%{y:.1f}%</b>")
         fig_line = apply_wmo_style(fig_line, f"Distribusi Pola Waktu - {month_choice}", "Jam Observasi (UTC)", y_label)
         fig_line.update_layout(xaxis=dict(tickmode='linear', dtick=3))
         st.plotly_chart(fig_line, use_container_width=True)
