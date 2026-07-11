@@ -117,7 +117,10 @@ def parse_wind(df):
                 
             if target_dir:
                 yr = int(val0) if (val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100) else current_year
-                valid_data.append([yr, target_dir] + list(row.iloc[start_col_idx:].values))
+                
+                # PERBAIKAN DESIMAL: Ubah koma menjadi titik pada nilai kecepatan angin sebelum dikonversi
+                vals = [str(x).replace(',', '.') for x in row.iloc[start_col_idx:].values]
+                valid_data.append([yr, target_dir] + vals)
         except Exception: continue
             
     if not valid_data: return pd.DataFrame()
@@ -125,7 +128,8 @@ def parse_wind(df):
     expected_cols = ['Tahun', 'Direction', '1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45', 'Total']
     parsed_df = parsed_df.iloc[:, :len(expected_cols)]
     parsed_df.columns = expected_cols[:len(parsed_df.columns)]
-    for c in parsed_df.columns[2:]: parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
+    for c in parsed_df.columns[2:]: 
+        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
     return parsed_df
 
 # ==========================================
@@ -260,14 +264,10 @@ if selected_param in ["TempMaxMin", "RH"]:
         y_label = "Suhu Udara (°C)" if selected_param == "TempMaxMin" else "Kelembapan Relatif (%)"
         param_name = param_options[selected_param].split(". ")[1]
         
-        # Mengekstrak HANYA parameter yang benar-benar tertulis di file (termasuk Daily_Mean, Max, Min)
         plot_cols = ['00', '03', '06', '09', '12', '15', '18', '21', 'Daily_Mean', 'Max', 'Min']
         avail_cols = [c for c in plot_cols if c in df_filtered.columns]
         
-        # Agregasi berdasar Tanggal (bukan Jam), agar nilai Harian seperti Max dan Min bisa tergambar
         agg_df = df_filtered.groupby('Tanggal')[avail_cols].mean().reset_index().sort_values('Tanggal')
-        
-        # Melt DataFrame agar bisa diplot sebagai multiple lines oleh Plotly Express
         melted = agg_df.melt(id_vars='Tanggal', value_vars=avail_cols, var_name='Variabel Observasi', value_name='Nilai')
         
         fig_line = px.line(
@@ -321,4 +321,17 @@ elif selected_param == "Wind":
             
             fig_polar = px.bar_polar(agg_rose, r="Frekuensi (%)", theta="Arah Mata Angin", color="Kecepatan (Knot)", color_discrete_sequence=px.colors.sequential.Plasma_r, template="plotly_white")
             fig_polar = apply_wmo_style(fig_polar, f"Mawar Angin (Wind Rose) - {month_choice}", "", "")
+            
+            # PERBAIKAN TRUE NORTH & CLOCKWISE
+            fig_polar.update_layout(
+                polar=dict(
+                    angularaxis=dict(
+                        direction="clockwise",  # Arah putaran (searah jarum jam)
+                        rotation=90,            # Putar starting point 90 derajat (Utara di Atas)
+                        categoryorder="array",  # Kunci urutan array mata angin sesuai kompas
+                        categoryarray=['N', 'NNE', 'ENE', 'E', 'ESE', 'SSE', 'S', 'SSW', 'WSW', 'W', 'WNW', 'NNW']
+                    )
+                )
+            )
+            
             st.plotly_chart(fig_polar, use_container_width=True)
