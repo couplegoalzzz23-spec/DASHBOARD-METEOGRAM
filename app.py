@@ -192,7 +192,7 @@ st.sidebar.markdown("### 🧭 Navigasi & Filter ACS")
 st.sidebar.markdown("---")
 
 param_options = {
-    "TempMaxMin": "1. Suhu Udara Synoptic (°C)",
+    "TempMaxMin": "1. T Daily & Max Min (°C)",
     "TempFreq": "2. Frekuensi Distribusi Suhu (%)",
     "RH": "3. Kelembapan Relatif / RH (%)",
     "Vis": "4. Jarak Pandang / Visibility (%)",
