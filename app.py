@@ -35,12 +35,12 @@ st.markdown("""
 PALET_MEJIKUHIBINIU = [
     "#D32F2F",  # Merah
     "#F57C00",  # Jingga / Orange
-    "#FBC02D",  # Kuning Emas (agar terbaca di background putih)
+    "#FBC02D",  # Kuning Emas (agar jelas terbaca di background putih)
     "#388E3C",  # Hijau
     "#1976D2",  # Biru
     "#303F9F",  # Nila / Indigo
     "#7B1FA2",  # Ungu / Violet
-    "#C2185B",  # Merah Muda-Ungu (Ekstra untuk parameter ke-8/9)
+    "#C2185B",  # Merah Muda-Ungu (Ekstra)
     "#0097A7",  # Biru Sian (Ekstra)
     "#455A64"   # Abu Slaty (Ekstra)
 ]
@@ -51,64 +51,115 @@ MONTHS_ID = [
 ]
 
 # ==========================================
-# 2. SMART DATA PARSERS (TAHAN BANTING)
+# 2. SMART DATA PARSERS (SUPER ADAPTIVE & TAHAN BANTING)
 # ==========================================
+def parse_synoptic_adaptive(df, is_temp=False):
+    """
+    Parser universal untuk membaca tabel Synoptic (8 Jam/24 Jam) maupun format tabel jam-jaman.
+    Otomatis mendeteksi struktur kolom Excel dari laporan BMKG yang bervariasi.
+    """
+    valid_rows = []
+    format_type = "synoptic_yr_dt"
+
+    for idx, row in df.iterrows():
+        try:
+            val0_str = str(row.iloc[0]).strip().replace(',', '.')
+            val1_str = str(row.iloc[1]).strip().replace(',', '.')
+            if not (val0_str.replace('.', '', 1).isdigit() and val1_str.replace('.', '', 1).isdigit()):
+                continue
+            
+            v0 = float(val0_str)
+            v1 = float(val1_str)
+            
+            # Pola 1: Col 0 = Tahun (2000-2100), Col 1 = Tanggal (1-31)
+            if 2000 <= v0 <= 2100 and 1 <= v1 <= 31:
+                valid_rows.append([int(v0), int(v1)] + list(row.iloc[2:].values))
+                format_type = "synoptic_yr_dt"
+            # Pola 2: Col 0 = Tanggal (1-31), Col 1 = Tahun (2000-2100)
+            elif 1 <= v0 <= 31 and 2000 <= v1 <= 2100:
+                valid_rows.append([int(v1), int(v0)] + list(row.iloc[2:].values))
+                format_type = "synoptic_yr_dt"
+            # Pola 3: Col 0 = Jam (0-23), Col 1 = Tahun (2000-2100) -> Format Tabel Jam-jaman
+            elif 0 <= v0 <= 23 and 2000 <= v1 <= 2100:
+                valid_rows.append([int(v1), int(v0)] + list(row.iloc[2:].values))
+                format_type = "hourly_row"
+            # Pola 4: Col 0 = Tahun (2000-2100), Col 1 = Jam (0-23)
+            elif 2000 <= v0 <= 2100 and 0 <= v1 <= 23:
+                valid_rows.append([int(v0), int(v1)] + list(row.iloc[2:].values))
+                format_type = "hourly_row"
+        except Exception:
+            continue
+            
+    if not valid_rows:
+        return pd.DataFrame()
+        
+    parsed_df = pd.DataFrame(valid_rows)
+    
+    if format_type == "synoptic_yr_dt":
+        num_cols = len(parsed_df.columns) - 2
+        if num_cols >= 24:
+            hours_cols = [f"{h:02d}" for h in range(24)]
+            cols = ['Tahun', 'Tanggal'] + hours_cols
+            parsed_df = parsed_df.iloc[:, :2+len(hours_cols)]
+            parsed_df.columns = cols
+        elif num_cols >= 8:
+            base_hours = ['00', '03', '06', '09', '12', '15', '18', '21']
+            if not is_temp and num_cols >= 11:
+                cols = ['Tahun', 'Tanggal'] + base_hours + ['Mean', 'Max', 'Min']
+                parsed_df = parsed_df.iloc[:, :len(cols)]
+                parsed_df.columns = cols
+            else:
+                cols = ['Tahun', 'Tanggal'] + base_hours
+                parsed_df = parsed_df.iloc[:, :len(cols)]
+                parsed_df.columns = cols
+        else:
+            hours_cols = [f"{h*3:02d}" for h in range(num_cols)]
+            cols = ['Tahun', 'Tanggal'] + hours_cols
+            parsed_df.columns = cols
+            
+    elif format_type == "hourly_row":
+        cols = ['Tahun', 'Jam', 'Nilai']
+        if len(parsed_df.columns) >= 3:
+            parsed_df = parsed_df.iloc[:, :3]
+            parsed_df.columns = cols
+        else:
+            return pd.DataFrame()
+            
+    for c in parsed_df.columns:
+        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
+        
+    return parsed_df
+
 def parse_hourly_freq(df, col_names):
     """Membaca tabel frekuensi per jam (Visibilitas, Cloud Base)."""
     valid_data = []
     for idx, row in df.iterrows():
         try:
-            val0 = str(row.iloc[0]).strip()
-            val1 = str(row.iloc[1]).strip()
-            if val0.replace('.', '', 1).isdigit() and val1.isdigit():
-                hr = float(val0)
-                yr = float(val1)
-                if 0 <= hr <= 23 and 2000 < yr < 2100:
-                    valid_data.append(row.values[:len(col_names)])
+            val0_str = str(row.iloc[0]).strip().replace(',', '.')
+            val1_str = str(row.iloc[1]).strip().replace(',', '.')
+            if not (val0_str.replace('.', '', 1).isdigit() and val1_str.replace('.', '', 1).isdigit()):
+                continue
+            v0 = float(val0_str)
+            v1 = float(val1_str)
+            
+            if 0 <= v0 <= 23 and 2000 <= v1 <= 2100:
+                valid_data.append([int(v0), int(v1)] + list(row.iloc[2:].values))
+            elif 2000 <= v0 <= 2100 and 0 <= v1 <= 23:
+                valid_data.append([int(v1), int(v0)] + list(row.iloc[2:].values))
         except Exception:
             continue
+            
     if not valid_data:
         return pd.DataFrame()
     parsed_df = pd.DataFrame(valid_data)
     parsed_df = parsed_df.iloc[:, :len(col_names)]
-    parsed_df.columns = col_names
-    for c in col_names:
-        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
-    return parsed_df
-
-def parse_3hourly(df, is_temp_simple=False):
-    """Membaca matriks synoptic 3-jam-an (RH, Temp, & TempMaxMin)."""
-    valid_data = []
-    for idx, row in df.iterrows():
-        try:
-            val0 = str(row.iloc[0]).strip()
-            val1 = str(row.iloc[1]).strip()
-            if val0.isdigit() and val1.isdigit():
-                yr = float(val0)
-                dt = float(val1)
-                if 2000 < yr < 2100 and 1 <= dt <= 31:
-                    valid_data.append(row.values)
-        except Exception:
-            continue
-    if not valid_data:
-        return pd.DataFrame()
-    
-    # Standar 8 Waktu Synoptic WMO: 00, 03, 06, 09, 12, 15, 18, 21 UTC
-    base_cols = ['Tahun', 'Tanggal', '00', '03', '06', '09', '12', '15', '18', '21']
-    if is_temp_simple or len(df.columns) < 13:
-        cols = base_cols
-        parsed_df = pd.DataFrame(valid_data).iloc[:, :len(cols)]
-    else:
-        cols = base_cols + ['Mean', 'Max', 'Min']
-        parsed_df = pd.DataFrame(valid_data).iloc[:, :13]
-        
-    parsed_df.columns = cols[:len(parsed_df.columns)]
+    parsed_df.columns = col_names[:len(parsed_df.columns)]
     for c in parsed_df.columns:
         parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
     return parsed_df
 
 def parse_wind(df):
-    """Membaca tabel Wind Rose 30-sektor standar WMO."""
+    """Membaca tabel Wind Rose 30-sektor standar WMO dengan toleransi pergeseran kolom."""
     valid_data = []
     current_year = 2021
     wind_sectors = ['35-36-01', '02-03-04', '05-06-07', '08-09-10', '11-12-13', '14-15-16', 
@@ -118,27 +169,39 @@ def parse_wind(df):
         try:
             val0 = str(row.iloc[0]).strip()
             val1 = str(row.iloc[1]).strip().replace(' ', '').upper()
+            val2_str = str(row.iloc[2]).strip().replace(' ', '').upper() if len(row) > 2 else ""
             
-            if val0.isdigit() and len(val0) == 4:
+            if val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100:
                 current_year = int(val0)
                 
+            target_dir = None
+            start_col_idx = 2
             if val1 in ['CALM', 'VARIABLE'] or val1 in wind_sectors:
-                yr = int(val0) if val0.isdigit() and len(val0) == 4 else current_year
-                new_row = [yr, val1] + list(row.iloc[2:12].values)
+                target_dir = val1
+                start_col_idx = 2
+            elif val2_str in ['CALM', 'VARIABLE'] or val2_str in wind_sectors:
+                target_dir = val2_str
+                start_col_idx = 3
+                
+            if target_dir:
+                yr = int(val0) if (val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100) else current_year
+                new_row = [yr, target_dir] + list(row.iloc[start_col_idx:].values)
                 valid_data.append(new_row)
         except Exception:
             continue
             
     if not valid_data:
         return pd.DataFrame()
-    parsed_df = pd.DataFrame(valid_data).iloc[:, :12]
-    parsed_df.columns = ['Tahun', 'Direction', '1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45', 'Total']
+    parsed_df = pd.DataFrame(valid_data)
+    expected_cols = ['Tahun', 'Direction', '1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45', 'Total']
+    parsed_df = parsed_df.iloc[:, :len(expected_cols)]
+    parsed_df.columns = expected_cols[:len(parsed_df.columns)]
     for c in parsed_df.columns[2:]:
         parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
     return parsed_df
 
 # ==========================================
-# 3. ENGINE PEMUAT DATA (6 FILE LENGKAP)
+# 3. ENGINE PEMUAT DATA (6 FILE LENGKAP & SMART MATCHING)
 # ==========================================
 @st.cache_data(show_spinner=False)
 def load_all_data():
@@ -151,16 +214,19 @@ def load_all_data():
         'Wind': pd.DataFrame()        # File ke-6
     }
     
-    # Deteksi otomatis jalur file (mendukung root atau folder data/)
     def get_file_path(filename):
         if os.path.exists(filename): return filename
         if os.path.exists(os.path.join('data', filename)): return os.path.join('data', filename)
+        # Pencarian case-insensitive di direktori aktif
+        for f in os.listdir('.'):
+            if f.lower() == filename.lower():
+                return f
         return filename
 
     files = {
-        'Temp': (get_file_path('Temp_2021-2025.xlsx'), lambda df: parse_3hourly(df, is_temp_simple=True)),
-        'TempMaxMin': (get_file_path('TempMaxMin_2021-2025.xlsx'), lambda df: parse_3hourly(df, is_temp_simple=False)),
-        'RH': (get_file_path('RH_2021-2025.xlsx'), lambda df: parse_3hourly(df, is_temp_simple=False)),
+        'Temp': (get_file_path('Temp_2021-2025.xlsx'), lambda df: parse_synoptic_adaptive(df, is_temp=True)),
+        'TempMaxMin': (get_file_path('TempMaxMin_2021-2025.xlsx'), lambda df: parse_synoptic_adaptive(df, is_temp=False)),
+        'RH': (get_file_path('RH_2021-2025.xlsx'), lambda df: parse_synoptic_adaptive(df, is_temp=False)),
         'HS': (get_file_path('HS_2021-2025.xlsx'), lambda df: parse_hourly_freq(df, ['Jam', 'Tahun', '<150', '<200', '<300', '<500', '<1000', '<1500'])),
         'Vis': (get_file_path('Vis_2021-2025.xlsx'), lambda df: parse_hourly_freq(df, ['Jam', 'Tahun', '<200', '<400', '<600', '<800', '<1500', '<1800', '<3000', '<5000', '<8000'])),
         'Wind': (get_file_path('Wind_2021-2025.xlsx'), parse_wind)
@@ -171,22 +237,33 @@ def load_all_data():
             all_sheets = []
             try:
                 xls = pd.ExcelFile(filepath, engine='openpyxl')
-                for month_idx, sheet in enumerate(MONTHS_ID):
-                    if sheet in xls.sheet_names:
-                        df_raw = pd.read_excel(xls, sheet_name=sheet, header=None)
+                for month_idx, month_name in enumerate(MONTHS_ID):
+                    # Smart Case-Insensitive Sheet Matching
+                    matched_sheet = None
+                    for s_name in xls.sheet_names:
+                        s_clean = str(s_name).strip().lower()
+                        m_clean = month_name.lower()
+                        m_short = m_clean[:3]
+                        if (s_clean == m_clean or s_clean.startswith(m_clean) or 
+                            s_clean.startswith(m_short) or f"{month_idx+1:02d}" in s_clean):
+                            matched_sheet = s_name
+                            break
+                    
+                    if matched_sheet:
+                        df_raw = pd.read_excel(xls, sheet_name=matched_sheet, header=None)
                         df_parsed = parser(df_raw)
                         if not df_parsed.empty:
-                            df_parsed['Bulan'] = sheet
+                            df_parsed['Bulan'] = month_name
                             df_parsed['Bulan_Idx'] = month_idx + 1
                             all_sheets.append(df_parsed)
                 if all_sheets:
                     datasets[key] = pd.concat(all_sheets, ignore_index=True)
             except Exception as e:
-                st.sidebar.error(f"⚠️ Gagal membaca {filepath}: {str(e)}")
+                st.sidebar.error(f"⚠️ Gagal memproses {filepath}: {str(e)}")
                 
     return datasets
 
-with st.spinner("🔄 Mengekstrak 6 File Laporan Climatological WMO..."):
+with st.spinner("🔄 Mengekstrak & Menstrukturkan 6 File Laporan Climatological WMO..."):
     data = load_all_data()
 
 # ==========================================
@@ -275,7 +352,6 @@ def apply_wmo_style(fig, title_text, x_label, y_label):
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='#E0E0E0', zeroline=False)
     return fig
 
-# Pilihan Tampilan Visualisasi (Meteogram vs Histogram Diurnal)
 col_ctrl1, col_ctrl2 = st.columns([3, 1])
 with col_ctrl2:
     chart_type = st.radio("Pilih Mode Visualisasi:", ["📈 Meteogram (Kurva Garis)", "📊 Histogram Diurnal (Batang)"], horizontal=False)
@@ -284,12 +360,21 @@ with col_ctrl2:
 if selected_param == "Temp":
     df_temp = filter_df(data['Temp'])
     if df_temp.empty:
-        st.warning("⚠️ Data file `Temp_2021-2025.xlsx` kosong atau belum diunggah di repositori GitHub.")
+        st.warning("⚠️ Data file `Temp_2021-2025.xlsx` tidak dapat diekstrak atau struktur tabel tidak valid. Cek format tabel Excel Anda.")
     else:
-        syn_hours = ['00', '03', '06', '09', '12', '15', '18', '21']
-        avail_hours = [h for h in syn_hours if h in df_temp.columns]
-        df_melt = df_temp.melt(id_vars=['Tahun', 'Bulan_Idx', 'Tanggal'], value_vars=avail_hours, var_name='Jam_UTC', value_name='Suhu')
-        agg_df = df_melt.groupby('Jam_UTC')['Suhu'].mean().reset_index().sort_values('Jam_UTC')
+        if 'Jam' in df_temp.columns and 'Nilai' in df_temp.columns:
+            agg_df = df_temp.groupby('Jam')['Nilai'].mean().reset_index().rename(columns={'Jam': 'Jam_UTC', 'Nilai': 'Suhu'})
+            agg_df['Jam_UTC'] = agg_df['Jam_UTC'].apply(lambda x: f"{int(x):02d}")
+        else:
+            syn_hours = [f"{h:02d}" for h in range(24)]
+            avail_hours = [h for h in syn_hours if h in df_temp.columns]
+            if not avail_hours:
+                avail_hours = [col for col in df_temp.columns if str(col).replace('.', '', 1).isdigit() and 0 <= float(col) <= 23]
+            df_melt = df_temp.melt(id_vars=['Tahun', 'Bulan_Idx', 'Tanggal'], value_vars=avail_hours, var_name='Jam_UTC', value_name='Suhu')
+            agg_df = df_melt.groupby('Jam_UTC')['Suhu'].mean().reset_index()
+            agg_df['Jam_UTC'] = agg_df['Jam_UTC'].apply(lambda x: f"{int(float(str(x))):02d}")
+            
+        agg_df = agg_df.sort_values('Jam_UTC')
         
         if "Meteogram" in chart_type:
             fig = px.line(agg_df, x='Jam_UTC', y='Suhu', markers=True, color_discrete_sequence=[PALET_MEJIKUHIBINIU[0]])
@@ -305,12 +390,21 @@ if selected_param == "Temp":
 elif selected_param == "TempMaxMin":
     df_t = filter_df(data['TempMaxMin'])
     if df_t.empty:
-        st.warning("⚠️ Data file `TempMaxMin_2021-2025.xlsx` tidak ditemukan atau format tidak valid.")
+        st.warning("⚠️ Data file `TempMaxMin_2021-2025.xlsx` tidak ditemukan atau struktur tabel tidak sesuai.")
     else:
-        syn_hours = ['00', '03', '06', '09', '12', '15', '18', '21']
-        avail_hours = [h for h in syn_hours if h in df_t.columns]
-        df_melt = df_t.melt(id_vars=['Tahun', 'Bulan_Idx', 'Tanggal'], value_vars=avail_hours, var_name='Jam_UTC', value_name='Suhu')
-        agg_df = df_melt.groupby('Jam_UTC')['Suhu'].mean().reset_index().sort_values('Jam_UTC')
+        if 'Jam' in df_t.columns and 'Nilai' in df_t.columns:
+            agg_df = df_t.groupby('Jam')['Nilai'].mean().reset_index().rename(columns={'Jam': 'Jam_UTC', 'Nilai': 'Suhu'})
+            agg_df['Jam_UTC'] = agg_df['Jam_UTC'].apply(lambda x: f"{int(x):02d}")
+        else:
+            syn_hours = [f"{h:02d}" for h in range(24)]
+            avail_hours = [h for h in syn_hours if h in df_t.columns]
+            if not avail_hours:
+                avail_hours = [col for col in df_t.columns if str(col).replace('.', '', 1).isdigit() and 0 <= float(col) <= 23]
+            df_melt = df_t.melt(id_vars=['Tahun', 'Bulan_Idx', 'Tanggal'], value_vars=avail_hours, var_name='Jam_UTC', value_name='Suhu')
+            agg_df = df_melt.groupby('Jam_UTC')['Suhu'].mean().reset_index()
+            agg_df['Jam_UTC'] = agg_df['Jam_UTC'].apply(lambda x: f"{int(float(str(x))):02d}")
+            
+        agg_df = agg_df.sort_values('Jam_UTC')
         
         if "Meteogram" in chart_type:
             fig = px.line(agg_df, x='Jam_UTC', y='Suhu', markers=True, color_discrete_sequence=[PALET_MEJIKUHIBINIU[1]])
@@ -328,10 +422,19 @@ elif selected_param == "RH":
     if df_r.empty:
         st.warning("⚠️ Data file `RH_2021-2025.xlsx` tidak ditemukan.")
     else:
-        syn_hours = ['00', '03', '06', '09', '12', '15', '18', '21']
-        avail_hours = [h for h in syn_hours if h in df_r.columns]
-        df_melt = df_r.melt(id_vars=['Tahun', 'Bulan_Idx', 'Tanggal'], value_vars=avail_hours, var_name='Jam_UTC', value_name='RH')
-        agg_df = df_melt.groupby('Jam_UTC')['RH'].mean().reset_index().sort_values('Jam_UTC')
+        if 'Jam' in df_r.columns and 'Nilai' in df_r.columns:
+            agg_df = df_r.groupby('Jam')['Nilai'].mean().reset_index().rename(columns={'Jam': 'Jam_UTC', 'Nilai': 'RH'})
+            agg_df['Jam_UTC'] = agg_df['Jam_UTC'].apply(lambda x: f"{int(x):02d}")
+        else:
+            syn_hours = [f"{h:02d}" for h in range(24)]
+            avail_hours = [h for h in syn_hours if h in df_r.columns]
+            if not avail_hours:
+                avail_hours = [col for col in df_r.columns if str(col).replace('.', '', 1).isdigit() and 0 <= float(col) <= 23]
+            df_melt = df_r.melt(id_vars=['Tahun', 'Bulan_Idx', 'Tanggal'], value_vars=avail_hours, var_name='Jam_UTC', value_name='RH')
+            agg_df = df_melt.groupby('Jam_UTC')['RH'].mean().reset_index()
+            agg_df['Jam_UTC'] = agg_df['Jam_UTC'].apply(lambda x: f"{int(float(str(x))):02d}")
+            
+        agg_df = agg_df.sort_values('Jam_UTC')
         
         if "Meteogram" in chart_type:
             fig = px.line(agg_df, x='Jam_UTC', y='RH', markers=True, color_discrete_sequence=[PALET_MEJIKUHIBINIU[4]])
@@ -401,7 +504,6 @@ elif selected_param == "Wind":
             '29-30-31': 'Barat Laut (WNW)', '32-33-34': 'Barat Laut (NNW)'
         }
         
-        # Urutan baku kompas meteorologi WMO (Searah jarum jam dari Utara)
         compass_order = [
             'Utara (N)', 'Timur Laut (NNE)', 'Timur Laut (ENE)', 'Timur (E)',
             'Tenggara (ESE)', 'Tenggara (SSE)', 'Selatan (S)', 'Barat Daya (SSW)',
@@ -425,7 +527,6 @@ elif selected_param == "Wind":
                 template="plotly_white"
             )
             
-            # Kepatuhan WMO: Putar sumbu 90 derajat agar Utara di atas, putaran searah jarum jam
             fig.update_layout(
                 polar=dict(
                     angularaxis=dict(
