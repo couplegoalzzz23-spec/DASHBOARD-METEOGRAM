@@ -192,7 +192,7 @@ st.sidebar.markdown("### 🧭 Navigasi & Filter ACS")
 st.sidebar.markdown("---")
 
 param_options = {
-    "TempMaxMin": "1. T Daily & Max Min (°C)",
+    "TempMaxMin": "1. Suhu Udara Synoptic (°C)",
     "TempFreq": "2. Frekuensi Distribusi Suhu (%)",
     "RH": "3. Kelembapan Relatif / RH (%)",
     "Vis": "4. Jarak Pandang / Visibility (%)",
@@ -338,7 +338,17 @@ elif selected_param == "Wind":
             melt_rose = rose_df.melt(id_vars=['Arah Mata Angin'], value_vars=avail_speeds, var_name='Kecepatan (Knot)', value_name='Frekuensi (%)')
             agg_rose = melt_rose.groupby(['Arah Mata Angin', 'Kecepatan (Knot)'])['Frekuensi (%)'].mean().reset_index()
             
-            fig_polar = px.bar_polar(agg_rose, r="Frekuensi (%)", theta="Arah Mata Angin", color="Kecepatan (Knot)", color_discrete_sequence=px.colors.sequential.Plasma_r, template="plotly_white")
+            # FIX KRITIKAL WIND ROSE: Tambahkan 'category_orders' agar indikator legenda mengikuti urutan valid (bukan alfabetis)
+            fig_polar = px.bar_polar(
+                agg_rose, 
+                r="Frekuensi (%)", 
+                theta="Arah Mata Angin", 
+                color="Kecepatan (Knot)", 
+                color_discrete_sequence=px.colors.sequential.Plasma_r, 
+                template="plotly_white",
+                category_orders={"Kecepatan (Knot)": avail_speeds} 
+            )
+            
             fig_polar = apply_wmo_style(fig_polar, f"Mawar Angin (Wind Rose) - {month_choice}", "", "")
             
             fig_polar.update_layout(
