@@ -72,7 +72,9 @@ def parse_synoptic(df):
         return pd.DataFrame()
             
     for c in parsed_df.columns:
-        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
+        # PERBAIKAN FATAL: Menghapus .fillna(0) agar data tetap otentik dan akurat.
+        # Nilai kosong/tidak ada (NaN) tidak boleh direpresentasikan sebagai 0 dlm standar WMO.
+        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce')
     return parsed_df
 
 def parse_hourly_freq(df, col_names):
@@ -94,7 +96,8 @@ def parse_hourly_freq(df, col_names):
     parsed_df = pd.DataFrame(valid_data).iloc[:, :len(col_names)]
     parsed_df.columns = col_names[:len(parsed_df.columns)]
     for c in parsed_df.columns:
-        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
+        # PERBAIKAN FATAL
+        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce')
     return parsed_df
 
 def parse_wind(df):
@@ -118,7 +121,6 @@ def parse_wind(df):
             if target_dir:
                 yr = int(val0) if (val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100) else current_year
                 
-                # PERBAIKAN DESIMAL: Ubah koma menjadi titik pada nilai kecepatan angin sebelum dikonversi
                 vals = [str(x).replace(',', '.') for x in row.iloc[start_col_idx:].values]
                 valid_data.append([yr, target_dir] + vals)
         except Exception: continue
@@ -129,7 +131,8 @@ def parse_wind(df):
     parsed_df = parsed_df.iloc[:, :len(expected_cols)]
     parsed_df.columns = expected_cols[:len(parsed_df.columns)]
     for c in parsed_df.columns[2:]: 
-        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce').fillna(0)
+        # PERBAIKAN FATAL
+        parsed_df[c] = pd.to_numeric(parsed_df[c], errors='coerce')
     return parsed_df
 
 # ==========================================
@@ -276,7 +279,16 @@ if selected_param in ["TempMaxMin", "RH"]:
         )
         fig_line.update_traces(line=dict(width=2), marker=dict(size=6))
         fig_line = apply_wmo_style(fig_line, f"Grafik Harian {param_name} - {month_choice} ({selected_year})", "Tanggal", y_label)
-        fig_line.update_layout(xaxis=dict(tickmode='linear', dtick=1))
+        
+        # PERBAIKAN TANGGAL: Mengunci Sumbu X murni hanya dari 1 hingga maksimal akhir bulan (menghapus 0 dan 32)
+        max_tanggal = int(agg_df['Tanggal'].max()) if not agg_df.empty else 31
+        fig_line.update_layout(
+            xaxis=dict(
+                tickmode='array', 
+                tickvals=list(range(1, max_tanggal + 1)),
+                range=[0.5, max_tanggal + 0.5] 
+            )
+        )
         st.plotly_chart(fig_line, use_container_width=True)
 
 # KELOMPOK 2: DATA DISTRIBUSI FREKUENSI (Berdasarkan Jam)
@@ -322,13 +334,12 @@ elif selected_param == "Wind":
             fig_polar = px.bar_polar(agg_rose, r="Frekuensi (%)", theta="Arah Mata Angin", color="Kecepatan (Knot)", color_discrete_sequence=px.colors.sequential.Plasma_r, template="plotly_white")
             fig_polar = apply_wmo_style(fig_polar, f"Mawar Angin (Wind Rose) - {month_choice}", "", "")
             
-            # PERBAIKAN TRUE NORTH & CLOCKWISE
             fig_polar.update_layout(
                 polar=dict(
                     angularaxis=dict(
-                        direction="clockwise",  # Arah putaran (searah jarum jam)
-                        rotation=90,            # Putar starting point 90 derajat (Utara di Atas)
-                        categoryorder="array",  # Kunci urutan array mata angin sesuai kompas
+                        direction="clockwise",  
+                        rotation=90,            
+                        categoryorder="array",  
                         categoryarray=['N', 'NNE', 'ENE', 'E', 'ESE', 'SSE', 'S', 'SSW', 'WSW', 'W', 'WNW', 'NNW']
                     )
                 )
