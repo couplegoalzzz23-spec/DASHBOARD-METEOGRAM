@@ -334,21 +334,23 @@ elif selected_param == "Wind":
         rose_df = df_w[~df_w['Direction'].isin(['CALM', 'VARIABLE'])].copy()
         if not rose_df.empty:
             rose_df['Arah Mata Angin'] = rose_df['Direction'].map(dir_map)
-            avail_speeds = [s for s in ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45'] if s in rose_df.columns]
+            # Standar hierarki kecepatan angin
+            kategori_angin_urut = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45']
+            avail_speeds = [s for s in kategori_angin_urut if s in rose_df.columns]
+            
             melt_rose = rose_df.melt(id_vars=['Arah Mata Angin'], value_vars=avail_speeds, var_name='Kecepatan (Knot)', value_name='Frekuensi (%)')
             agg_rose = melt_rose.groupby(['Arah Mata Angin', 'Kecepatan (Knot)'])['Frekuensi (%)'].mean().reset_index()
             
-            # FIX KRITIKAL WIND ROSE: Tambahkan 'category_orders' agar indikator legenda mengikuti urutan valid (bukan alfabetis)
+            # PERBAIKAN: Penambahan parameter `category_orders` untuk mengunci urutan legenda & `Rainbow` color
             fig_polar = px.bar_polar(
                 agg_rose, 
                 r="Frekuensi (%)", 
                 theta="Arah Mata Angin", 
                 color="Kecepatan (Knot)", 
-                color_discrete_sequence=px.colors.sequential.Plasma_r, 
-                template="plotly_white",
-                category_orders={"Kecepatan (Knot)": avail_speeds} 
+                color_discrete_sequence=px.colors.sequential.Rainbow,
+                category_orders={"Kecepatan (Knot)": kategori_angin_urut},
+                template="plotly_white"
             )
-            
             fig_polar = apply_wmo_style(fig_polar, f"Mawar Angin (Wind Rose) - {month_choice}", "", "")
             
             fig_polar.update_layout(
