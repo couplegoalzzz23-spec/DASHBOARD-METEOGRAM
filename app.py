@@ -49,7 +49,6 @@ def parse_synoptic(df):
             if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()): continue
             v0, v1 = float(val0), float(val1)
             
-            # FIX KRITIKAL: Tangani desimal berkoma pada seluruh nilai observasi agar tidak lenyap menjadi NaN
             rest_vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[2:].values]
             
             if 2000 <= v0 <= 2100 and 1 <= v1 <= 31:
@@ -87,7 +86,6 @@ def parse_hourly_freq(df, col_names):
             if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()): continue
             v0, v1 = float(val0), float(val1)
             
-            # FIX KRITIKAL
             rest_vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[2:].values]
             
             if 0 <= v0 <= 23 and 2000 <= v1 <= 2100:
@@ -124,7 +122,6 @@ def parse_wind(df):
             if target_dir:
                 yr = int(val0) if (val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100) else current_year
                 
-                # FIX KRITIKAL
                 vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[start_col_idx:].values]
                 valid_data.append([yr, target_dir] + vals)
         except Exception: continue
@@ -241,7 +238,7 @@ with kpi_cols[3]:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
-# 6. ENGINE VISUALISASI TUNGGAL (UI HOVER DIPERBAIKI)
+# 6. ENGINE VISUALISASI TUNGGAL 
 # ==========================================
 def apply_wmo_style(fig, title_text, x_label, y_label):
     fig.update_layout(
@@ -275,14 +272,12 @@ if selected_param in ["TempMaxMin", "RH"]:
         
         agg_df = df_filtered.groupby('Tanggal')[avail_cols].mean().reset_index().sort_values('Tanggal')
         
-        # Penamaan ulang kolom untuk estetika hover
         melted = agg_df.melt(id_vars='Tanggal', value_vars=avail_cols, var_name='Jam / Indikator', value_name='Nilai')
         
         fig_line = px.line(
             melted, x='Tanggal', y='Nilai', color='Jam / Indikator', 
             markers=True, color_discrete_sequence=px.colors.qualitative.Alphabet
         )
-        # FIX VISUAL: Menghilangkan redundansi string (contoh: "Variabel Observasi=09") menjadi format ringkas dan profesional
         fig_line.update_traces(line=dict(width=2), marker=dict(size=6), hovertemplate="<b>%{y}</b>")
         fig_line = apply_wmo_style(fig_line, f"Grafik Harian {param_name} - {month_choice} ({selected_year})", "Tanggal", y_label)
         
@@ -317,14 +312,12 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
         hm_df = agg_v.melt(id_vars='Jam', value_vars=avail_cols, var_name='Kategori', value_name='Persentase')
         
         fig_line = px.line(hm_df, x='Jam', y='Persentase', color='Kategori', markers=True, color_discrete_sequence=PALET_KATEGORI)
-        
-        # FIX VISUAL: Membuat hover bersih hanya angka persentase
         fig_line.update_traces(line=dict(width=3), marker=dict(size=8), hovertemplate="<b>%{y:.1f}%</b>")
         fig_line = apply_wmo_style(fig_line, f"Distribusi Pola Waktu - {month_choice}", "Jam Observasi (UTC)", y_label)
         fig_line.update_layout(xaxis=dict(tickmode='linear', dtick=3))
         st.plotly_chart(fig_line, use_container_width=True)
 
-# KELOMPOK 3: WIND ROSE
+# KELOMPOK 3: WIND ROSE (DIPERBAIKI)
 elif selected_param == "Wind":
     df_w = filter_df(data['Wind'])
     if df_w.empty: 
@@ -334,21 +327,24 @@ elif selected_param == "Wind":
         rose_df = df_w[~df_w['Direction'].isin(['CALM', 'VARIABLE'])].copy()
         if not rose_df.empty:
             rose_df['Arah Mata Angin'] = rose_df['Direction'].map(dir_map)
-            # Standar hierarki kecepatan angin
-            kategori_angin_urut = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45']
-            avail_speeds = [s for s in kategori_angin_urut if s in rose_df.columns]
+            
+            # Mendefinisikan urutan absolut agar terhindar dari sorting alfabetikal pandas yang mengacaukan legend
+            urutan_kecepatan = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45']
+            avail_speeds = [s for s in urutan_kecepatan if s in rose_df.columns]
             
             melt_rose = rose_df.melt(id_vars=['Arah Mata Angin'], value_vars=avail_speeds, var_name='Kecepatan (Knot)', value_name='Frekuensi (%)')
             agg_rose = melt_rose.groupby(['Arah Mata Angin', 'Kecepatan (Knot)'])['Frekuensi (%)'].mean().reset_index()
             
-            # PERBAIKAN: Penambahan parameter `category_orders` untuk mengunci urutan legenda & `Rainbow` color
+            # Palet warna kustom meteorologi SANGAT KONTRAS (Biru -> Hijau -> Kuning -> Merah -> Hitam)
+            warna_kontras = ['#0000FF', '#00BFFF', '#00FA9A', '#FFD700', '#FF8C00', '#FF0000', '#C71585', '#8B008B', '#000000']
+            
             fig_polar = px.bar_polar(
                 agg_rose, 
                 r="Frekuensi (%)", 
                 theta="Arah Mata Angin", 
                 color="Kecepatan (Knot)", 
-                color_discrete_sequence=px.colors.sequential.Rainbow,
-                category_orders={"Kecepatan (Knot)": kategori_angin_urut},
+                color_discrete_sequence=warna_kontras,
+                category_orders={"Kecepatan (Knot)": urutan_kecepatan}, # FIX KRUSIAL: Mengunci urutan array Legend
                 template="plotly_white"
             )
             fig_polar = apply_wmo_style(fig_polar, f"Mawar Angin (Wind Rose) - {month_choice}", "", "")
