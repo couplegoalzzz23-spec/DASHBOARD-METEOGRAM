@@ -30,7 +30,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Palet Warna MEJIKUHIBINIU Standar untuk Kategori
 PALET_KATEGORI = px.colors.qualitative.Plotly
 
 MONTHS_ID = [
@@ -39,10 +38,9 @@ MONTHS_ID = [
 ]
 
 # ==========================================
-# 2. SMART DATA PARSERS (DIPERBAIKI)
+# 2. SMART DATA PARSERS 
 # ==========================================
 def parse_synoptic(df):
-    """Parser khusus untuk data observasi Synoptic (TempMaxMin & RH)"""
     valid_rows = []
     for idx, row in df.iterrows():
         try:
@@ -51,7 +49,6 @@ def parse_synoptic(df):
             if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()): continue
             v0, v1 = float(val0), float(val1)
             
-            # Format: Tahun, Tanggal, Jam 0, 3, 6, 9, 12, 15, 18, 21, Mean, Max, Min
             if 2000 <= v0 <= 2100 and 1 <= v1 <= 31:
                 valid_rows.append([int(v0), int(v1)] + list(row.iloc[2:].values))
             elif 1 <= v0 <= 31 and 2000 <= v1 <= 2100:
@@ -63,7 +60,6 @@ def parse_synoptic(df):
     parsed_df = pd.DataFrame(valid_rows)
     num_cols = len(parsed_df.columns)
     
-    # Targetkan ekstraksi 13 Kolom: Tahun, Tgl, 8 Jam Synoptic, Daily_Mean, Max, Min
     base_cols = ['Tahun', 'Tanggal', '00', '03', '06', '09', '12', '15', '18', '21', 'Daily_Mean', 'Max', 'Min']
     
     if num_cols >= 13:
@@ -80,7 +76,6 @@ def parse_synoptic(df):
     return parsed_df
 
 def parse_hourly_freq(df, col_names):
-    """Parser khusus untuk tabel distribusi frekuensi per Jam (TempFreq, Vis, HS)"""
     valid_data = []
     for idx, row in df.iterrows():
         try:
@@ -89,7 +84,6 @@ def parse_hourly_freq(df, col_names):
             if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()): continue
             v0, v1 = float(val0), float(val1)
             
-            # Format: Jam, Tahun, Range1, Range2, dst...
             if 0 <= v0 <= 23 and 2000 <= v1 <= 2100:
                 valid_data.append([int(v0), int(v1)] + list(row.iloc[2:].values))
             elif 2000 <= v0 <= 2100 and 0 <= v1 <= 23:
@@ -104,7 +98,6 @@ def parse_hourly_freq(df, col_names):
     return parsed_df
 
 def parse_wind(df):
-    """Parser arah dan kecepatan angin"""
     valid_data = []
     current_year = 2021
     wind_sectors = ['35-36-01', '02-03-04', '05-06-07', '08-09-10', '11-12-13', '14-15-16', 
@@ -147,7 +140,6 @@ def load_all_data():
         if os.path.exists(os.path.join('data', filename)): return os.path.join('data', filename)
         return filename
 
-    # MAPPING PARSER YANG BENAR BERDASARKAN STRUKTUR DATA
     files = {
         'TempMaxMin': (get_file_path('TempMaxMin_2021-2025.xlsx'), parse_synoptic),
         'TempFreq': (get_file_path('Temp_2021-2025.xlsx'), lambda df: parse_hourly_freq(df, ['Jam', 'Tahun', '5 - 0', '0 - 5', '5 - 10', '10 - 15', '15 - 20', '20 - 25', '25 - 30', '30 - 35', '> 35'])),
@@ -189,13 +181,14 @@ with st.spinner("🔄 Mengekstrak Laporan Climatological WMO..."):
 st.sidebar.markdown("### 🧭 Navigasi & Filter ACS")
 st.sidebar.markdown("---")
 
+# Perbaikan KeyError: Key disamakan dengan dataset ('Vis' dan 'HS'), dan diubah menjadi satuan Persentase (%)
 param_options = {
     "TempMaxMin": "1. Suhu Udara Synoptic (°C)",
-    "TempFreq": "2. Frekuensi Distribusi Suhu (°C)",
+    "TempFreq": "2. Frekuensi Distribusi Suhu (%)",
     "RH": "3. Kelembapan Relatif / RH (%)",
-    "Visibility": "4. Jarak Pandang / Visibility (m)",
-    "Cloud Base (HS)": "5. Tinggi Dasar Awan / Ceiling (ft)",
-    "Wind": "6. Mawar Angin / Wind Rose (Knots)"
+    "Vis": "4. Jarak Pandang / Visibility (%)",
+    "HS": "5. Tinggi Dasar Awan / Ceiling (%)",
+    "Wind": "6. Mawar Angin / Wind Rose (%)"
 }
 
 selected_param = st.sidebar.selectbox("Pilih Parameter Meteorologi:", list(param_options.keys()), format_func=lambda x: param_options[x])
@@ -239,10 +232,9 @@ with kpi_cols[3]:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ==========================================
-# 6. ENGINE VISUALISASI (2 TABS UTAMA)
+# 6. ENGINE VISUALISASI (2 TABS UTAMA - HANYA METEOGRAM)
 # ==========================================
 def apply_wmo_style(fig, title_text, x_label, y_label):
-    """Menerapkan Styling UI/UX yang Jelas, Elegan, dan Professional"""
     fig.update_layout(
         title=dict(text=f"<b>{title_text}</b>", font=dict(size=18, color="#0B3C5D")),
         xaxis_title=f"<b>{x_label}</b>", 
@@ -258,7 +250,6 @@ def apply_wmo_style(fig, title_text, x_label, y_label):
     return fig
 
 def aggregate_synoptic(df, time_col='Jam_UTC'):
-    """Agregasi untuk data Synoptic (Suhu & RH)"""
     syn_hours = ['00', '03', '06', '09', '12', '15', '18', '21']
     avail = [h for h in syn_hours if h in df.columns]
     if not avail: return pd.DataFrame()
@@ -267,30 +258,28 @@ def aggregate_synoptic(df, time_col='Jam_UTC'):
     agg['Value'] = agg['Value'].round(2)
     return agg.sort_values(time_col)
 
-tab1, tab2 = st.tabs(["📊 Menu 1: Pola Diurnal (Berdampingan)", "🌦️ Menu 2: Pola Musiman (Tren Bulanan)"])
+# Menyesuaikan nama tab karena grafik histogram/berdampingan dihapus
+tab1, tab2 = st.tabs(["📊 Menu 1: Pola Diurnal (Meteogram)", "🌦️ Menu 2: Pola Musiman (Tren Bulanan)"])
 
-# ----------------- TAB 1: DIURNAL (BERDAMPINGAN) -----------------
+# ----------------- TAB 1: DIURNAL -----------------
 with tab1:
-    col_met, col_hist = st.columns(2)
-    
-    # KELOMPOK 1: DATA SYNOPTIC NILAI TUNGGAL (Multi-color scale berdasarkan suhu/kelembapan)
+    # KELOMPOK 1: DATA SYNOPTIC NILAI TUNGGAL
     if selected_param in ["TempMaxMin", "RH"]:
         df_filtered = filter_df(data[selected_param])
         if df_filtered.empty: st.warning(f"⚠️ Data {selected_param} kosong/tidak valid.")
         else:
             agg_df = aggregate_synoptic(df_filtered)
             
-            # Keterangan sumbu dan skala warna dinamis (Variasi Warna)
             if selected_param == "TempMaxMin":
                 y_label = "Suhu Udara Rata-rata (°C)"
-                c_scale = 'Turbo' # Variasi warna gradasi suhu (Biru -> Merah)
+                c_scale = 'Turbo' 
             else:
                 y_label = "Tingkat Kelembapan Relatif (%)"
-                c_scale = 'YlGnBu' # Variasi warna kelembapan (Kuning -> Biru Tua)
+                c_scale = 'YlGnBu' 
                 
             param_name = param_options[selected_param].split(". ")[1]
             
-            # Meteogram (Garis dengan penanda warna bervariasi)
+            # Meteogram
             fig_line = go.Figure()
             fig_line.add_trace(go.Scatter(
                 x=agg_df['Jam_UTC'], y=agg_df['Value'], mode='lines+markers+text',
@@ -300,46 +289,33 @@ with tab1:
                 name=param_name
             ))
             fig_line = apply_wmo_style(fig_line, f"Meteogram Diurnal - {month_choice} ({selected_year})", "Jam Observasi (UTC)", y_label)
-            col_met.plotly_chart(fig_line, use_container_width=True)
-            
-            # Histogram/Bar (Batang dengan warna bervariasi)
-            fig_bar = px.bar(agg_df, x='Jam_UTC', y='Value', color='Value', color_continuous_scale=c_scale, text='Value')
-            fig_bar.update_traces(textposition='outside', marker_line_color='black', marker_line_width=1)
-            fig_bar.layout.coloraxis.colorbar.title = y_label
-            fig_bar = apply_wmo_style(fig_bar, f"Histogram Diurnal - {month_choice} ({selected_year})", "Jam Observasi (UTC)", y_label)
-            col_hist.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_line, use_container_width=True) # Full width, histogram dihapus
 
-    # KELOMPOK 2: DATA DISTRIBUSI FREKUENSI (Kategori bervariasi warna)
-    elif selected_param in ["TempFreq", "Visibility", "Cloud Base (HS)"]:
+    # KELOMPOK 2: DATA DISTRIBUSI FREKUENSI (Menggunakan format Persentase)
+    elif selected_param in ["TempFreq", "Vis", "HS"]:
         df_filtered = filter_df(data[selected_param])
         if df_filtered.empty: st.warning(f"⚠️ Data {selected_param} kosong/tidak valid.")
         else:
             if selected_param == "TempFreq":
                 cols = ['5 - 0', '0 - 5', '5 - 10', '10 - 15', '15 - 20', '20 - 25', '25 - 30', '30 - 35', '> 35']
-                y_label = "Frekuensi Kejadian Suhu"
-            elif selected_param == "Visibility":
+                y_label = "Persentase Kejadian Suhu (%)"
+            elif selected_param == "Vis":
                 cols = ['<200', '<400', '<600', '<800', '<1500', '<1800', '<3000', '<5000', '<8000']
-                y_label = "Frekuensi Jarak Pandang"
+                y_label = "Persentase Jarak Pandang (%)"
             else:
                 cols = ['<150', '<200', '<300', '<500', '<1000', '<1500']
-                y_label = "Frekuensi Dasar Awan"
+                y_label = "Persentase Dasar Awan (%)"
                 
             avail_cols = [c for c in cols if c in df_filtered.columns]
             agg_v = df_filtered.groupby('Jam')[avail_cols].mean().reset_index().sort_values('Jam')
-            hm_df = agg_v.melt(id_vars='Jam', value_vars=avail_cols, var_name='Kategori Parameter', value_name='Nilai Frekuensi')
+            hm_df = agg_v.melt(id_vars='Jam', value_vars=avail_cols, var_name='Kategori Parameter', value_name='Persentase Frekuensi (%)')
             
             # Meteogram
-            fig_line = px.line(hm_df, x='Jam', y='Nilai Frekuensi', color='Kategori Parameter', markers=True, color_discrete_sequence=PALET_KATEGORI)
+            fig_line = px.line(hm_df, x='Jam', y='Persentase Frekuensi (%)', color='Kategori Parameter', markers=True, color_discrete_sequence=PALET_KATEGORI)
             fig_line.update_traces(line=dict(width=3), marker=dict(size=8))
             fig_line = apply_wmo_style(fig_line, f"Distribusi Pola Waktu - {month_choice}", "Jam Observasi (UTC)", y_label)
             fig_line.update_layout(xaxis=dict(tickmode='linear', dtick=3))
-            col_met.plotly_chart(fig_line, use_container_width=True)
-            
-            # Histogram/Bar
-            fig_bar = px.bar(hm_df, x='Jam', y='Nilai Frekuensi', color='Kategori Parameter', barmode='group', color_discrete_sequence=PALET_KATEGORI)
-            fig_bar = apply_wmo_style(fig_bar, f"Histogram Distribusi Kategori - {month_choice}", "Jam Observasi (UTC)", y_label)
-            fig_bar.update_layout(xaxis=dict(tickmode='linear', dtick=3))
-            col_hist.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_line, use_container_width=True) # Full width, histogram dihapus
 
     # KELOMPOK 3: WIND ROSE
     elif selected_param == "Wind":
@@ -357,16 +333,11 @@ with tab1:
                 # Polar Rose
                 fig_polar = px.bar_polar(agg_rose, r="Frekuensi (%)", theta="Arah Mata Angin", color="Kecepatan (Knot)", color_discrete_sequence=px.colors.sequential.Plasma_r, template="plotly_white")
                 fig_polar = apply_wmo_style(fig_polar, f"Mawar Angin (Wind Rose) - {month_choice}", "", "")
-                col_met.plotly_chart(fig_polar, use_container_width=True)
-                
-                # Histogram Distribusi Arah
-                fig_bar = px.bar(agg_rose, x='Arah Mata Angin', y='Frekuensi (%)', color='Kecepatan (Knot)', barmode='stack', color_discrete_sequence=px.colors.sequential.Plasma_r)
-                fig_bar = apply_wmo_style(fig_bar, f"Histogram Distribusi Arah Angin - {month_choice}", "Kategori Arah Mata Angin", "Frekuensi Kejadian (%)")
-                col_hist.plotly_chart(fig_bar, use_container_width=True)
+                st.plotly_chart(fig_polar, use_container_width=True) # Full width, histogram dihapus
 
 # ----------------- TAB 2: MUSIMAN (SEASONAL) -----------------
 with tab2:
-    st.info(f"💡 Menampilkan pola **TREN MUSIMAN** dari Januari - Desember. Sumbu X merupakan **Bulan Observasi**, dan Sumbu Y menunjukkan nilai akumulasi/rata-rata pada bulan tersebut. (Tahun: {selected_year})")
+    st.info(f"💡 Menampilkan pola **TREN MUSIMAN** dari Januari - Desember. Sumbu X merupakan **Bulan Observasi**, dan Sumbu Y menunjukkan nilai persentase/akumulasi pada bulan tersebut. (Tahun: {selected_year})")
     
     if selected_param in ["TempMaxMin", "RH"]:
         df_season = filter_df(data[selected_param], ignore_month=True)
@@ -391,32 +362,39 @@ with tab2:
             fig_season = apply_wmo_style(fig_season, f"Tren Musiman {param_name} Berdasarkan Bulan - {selected_year}", "Bulan Observasi Sepanjang Tahun", y_label)
             st.plotly_chart(fig_season, use_container_width=True)
 
-    elif selected_param in ["TempFreq", "Visibility", "Cloud Base (HS)"]:
+    elif selected_param in ["TempFreq", "Vis", "HS"]:
         df_season = filter_df(data[selected_param], ignore_month=True)
         if not df_season.empty:
             if selected_param == "TempFreq": cols = ['5 - 0', '0 - 5', '5 - 10', '10 - 15', '15 - 20', '20 - 25', '25 - 30', '30 - 35', '> 35']
-            elif selected_param == "Visibility": cols = ['<200', '<400', '<600', '<800', '<1500', '<1800', '<3000', '<5000', '<8000']
+            elif selected_param == "Vis": cols = ['<200', '<400', '<600', '<800', '<1500', '<1800', '<3000', '<5000', '<8000']
             else: cols = ['<150', '<200', '<300', '<500', '<1000', '<1500']
                 
             avail_cols = [c for c in cols if c in df_season.columns]
             agg_v_season = df_season.groupby(['Bulan_Idx', 'Bulan'])[avail_cols].mean().reset_index().sort_values('Bulan_Idx')
-            hm_df_s = agg_v_season.melt(id_vars='Bulan', value_vars=avail_cols, var_name='Kategori Parameter', value_name='Nilai Frekuensi')
+            hm_df_s = agg_v_season.melt(id_vars='Bulan', value_vars=avail_cols, var_name='Kategori Parameter', value_name='Persentase Frekuensi (%)')
             
-            fig_season = px.line(hm_df_s, x='Bulan', y='Nilai Frekuensi', color='Kategori Parameter', markers=True, color_discrete_sequence=PALET_KATEGORI)
+            fig_season = px.line(hm_df_s, x='Bulan', y='Persentase Frekuensi (%)', color='Kategori Parameter', markers=True, color_discrete_sequence=PALET_KATEGORI)
             fig_season.update_traces(line=dict(width=3), marker=dict(size=10))
-            fig_season = apply_wmo_style(fig_season, f"Pola Musiman Distribusi Kategori - {selected_year}", "Bulan Observasi Sepanjang Tahun", "Nilai Frekuensi Kejadian")
+            fig_season = apply_wmo_style(fig_season, f"Pola Musiman Distribusi Kategori - {selected_year}", "Bulan Observasi Sepanjang Tahun", "Persentase Kejadian (%)")
             st.plotly_chart(fig_season, use_container_width=True)
 
     elif selected_param == "Wind":
+        # Meskipun histogram dihapus, untuk musiman Wind Calm biasanya disajikan dalam bentuk batang yang merepresentasikan waktu
         df_season = filter_df(data['Wind'], ignore_month=True)
         if not df_season.empty:
             calm_df = df_season[df_season['Direction'] == 'CALM'].copy()
             if not calm_df.empty:
                 agg_calm = calm_df.groupby(['Bulan_Idx', 'Bulan'])['Total'].mean().reset_index().sort_values('Bulan_Idx')
                 
-                fig_season = px.bar(agg_calm, x='Bulan', y='Total', color='Total', color_continuous_scale='Mint', text='Total')
-                fig_season.update_traces(texttemplate='%{text:.1f}%', textposition='outside', marker_line_color='black', marker_line_width=1)
-                fig_season.layout.coloraxis.colorbar.title = "Frekuensi (%)"
-                fig_season = apply_wmo_style(fig_season, f"Tren Musiman Kejadian Angin CALM - {selected_year}", "Bulan Observasi Sepanjang Tahun", "Frekuensi Kejadian CALM (%)")
+                # Diganti menjadi diagram garis (meteogram trend) sesuai permintaan menghilangkan histogram/bar
+                fig_season = go.Figure()
+                fig_season.add_trace(go.Scatter(
+                    x=agg_calm['Bulan'], y=agg_calm['Total'], mode='lines+markers+text',
+                    text=agg_calm['Total'].round(1), textposition="top center",
+                    line=dict(color='rgba(150, 150, 150, 0.6)', width=3),
+                    marker=dict(size=14, color=agg_calm['Total'], colorscale='Mint', showscale=True, colorbar=dict(title="Persentase (%)")),
+                    name="Angin CALM"
+                ))
+                fig_season = apply_wmo_style(fig_season, f"Tren Musiman Kejadian Angin CALM - {selected_year}", "Bulan Observasi Sepanjang Tahun", "Persentase Kejadian CALM (%)")
                 st.plotly_chart(fig_season, use_container_width=True)
             else: st.info("Tidak ada data angin CALM musiman tercatat untuk ditampilkan.")
