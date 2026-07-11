@@ -30,31 +30,32 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-PALET_KATEGORI = px.colors.qualitative.Plotly
+# Palet Kontras Tinggi untuk Distribusi Kategori
+PALET_KATEGORI = px.colors.qualitative.Bold
 
 MONTHS_ID = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni", 
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 ]
 
-# Dictionary Pemetaan Kelompok Musim BMKG (Standar Sirkulasi Monsunal)
+# Dictionary Pemetaan Kelompok Musim WMO & BMKG (Standar Sirkulasi Monsunal)
 MUSIM_MAP = {
-    "Desember": "Monsun Asia (Musim Hujan)",
-    "Januari": "Monsun Asia (Musim Hujan)",
-    "Februari": "Monsun Asia (Musim Hujan)",
-    "Maret": "Peralihan I (Pancaroba)",
-    "April": "Peralihan I (Pancaroba)",
-    "Mei": "Peralihan I (Pancaroba)",
-    "Juni": "Monsun Australia (Musim Kemarau)",
-    "Juli": "Monsun Australia (Musim Kemarau)",
-    "Agustus": "Monsun Australia (Musim Kemarau)",
-    "September": "Monsun Australia (Musim Kemarau)",
-    "Oktober": "Peralihan II (Pancaroba)",
-    "November": "Peralihan II (Pancaroba)",
+    "Desember": "DJF (Desember - Januari - Februari) | Monsun Asia / Musim Hujan",
+    "Januari": "DJF (Desember - Januari - Februari) | Monsun Asia / Musim Hujan",
+    "Februari": "DJF (Desember - Januari - Februari) | Monsun Asia / Musim Hujan",
+    "Maret": "MAM (Maret - April - Mei) | Peralihan I / Pancaroba",
+    "April": "MAM (Maret - April - Mei) | Peralihan I / Pancaroba",
+    "Mei": "MAM (Maret - April - Mei) | Peralihan I / Pancaroba",
+    "Juni": "JJAS (Juni - Juli - Agustus - September) | Monsun Australia / Kemarau",
+    "Juli": "JJAS (Juni - Juli - Agustus - September) | Monsun Australia / Kemarau",
+    "Agustus": "JJAS (Juni - Juli - Agustus - September) | Monsun Australia / Kemarau",
+    "September": "JJAS (Juni - Juli - Agustus - September) | Monsun Australia / Kemarau",
+    "Oktober": "SON (Oktober - November) | Peralihan II / Pancaroba",
+    "November": "SON (Oktober - November) | Peralihan II / Pancaroba",
 }
 
 # ==========================================
-# 2. SMART DATA PARSERS (ROBUST & BUG FIXED)
+# 2. SMART DATA PARSERS (ROBUST & FUTURE-PROOF)
 # ==========================================
 def parse_synoptic(df):
     valid_rows = []
@@ -273,6 +274,52 @@ def apply_wmo_style(fig, title_text, x_label, y_label):
     fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(211, 211, 211, 0.5)')
     return fig
 
+# FUNGSI MODULAR PEMBUAT WIND ROSE (HIGH CONTRAST & RESILIENT)
+def create_wind_rose_figure(rose_df, title_text):
+    dir_map = {
+        '35-36-01':'N', '02-03-04':'NNE', '05-06-07':'ENE', '08-09-10':'E', 
+        '11-12-13':'ESE', '14-15-16':'SSE', '17-18-19':'S', '20-21-22':'SSW', 
+        '23-24-25':'WSW', '26-27-28':'W', '29-30-31':'WNW', '32-33-34':'NNW'
+    }
+    df_clean = rose_df[~rose_df['Direction'].isin(['CALM', 'VARIABLE'])].copy()
+    if df_clean.empty: return None
+    
+    df_clean['Arah Mata Angin'] = df_clean['Direction'].map(dir_map)
+    urutan_kecepatan = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45']
+    avail_speeds = [s for s in urutan_kecepatan if s in df_clean.columns]
+    
+    melt_rose = df_clean.melt(id_vars=['Arah Mata Angin'], value_vars=avail_speeds, var_name='Kecepatan (Knot)', value_name='Frekuensi (%)')
+    agg_rose = melt_rose.groupby(['Arah Mata Angin', 'Kecepatan (Knot)'])['Frekuensi (%)'].mean(numeric_only=True).reset_index()
+    
+    # Palet Warna Meteorologi Super Kontras (Navy -> Blue -> Green -> Yellow -> Orange -> Red -> Magenta -> Purple -> Black)
+    warna_kontras = [
+        '#001f3f', '#0074D9', '#2ECC40', '#FFDC00', '#FF851B', 
+        '#FF4136', '#F012BE', '#B10DC9', '#111111'
+    ]
+    
+    fig_polar = px.bar_polar(
+        agg_rose, 
+        r="Frekuensi (%)", 
+        theta="Arah Mata Angin", 
+        color="Kecepatan (Knot)", 
+        color_discrete_sequence=warna_kontras,
+        category_orders={"Kecepatan (Knot)": urutan_kecepatan}, 
+        template="plotly_white"
+    )
+    fig_polar = apply_wmo_style(fig_polar, title_text, "", "")
+    fig_polar.update_layout(
+        polar=dict(
+            angularaxis=dict(
+                direction="clockwise",  
+                rotation=90,            
+                categoryorder="array",  
+                categoryarray=['N', 'NNE', 'ENE', 'E', 'ESE', 'SSE', 'S', 'SSW', 'WSW', 'W', 'WNW', 'NNW']
+            ),
+            radialaxis=dict(showgrid=True, gridcolor='rgba(211, 211, 211, 0.6)', ticksuffix="%")
+        )
+    )
+    return fig_polar
+
 st.markdown(f"### 📊 Visualisasi Data {param_options[selected_param].split('. ')[1]}")
 st.markdown("---")
 
@@ -289,24 +336,14 @@ if selected_param in ["TempMaxMin", "RH"]:
         avail_cols = [c for c in plot_cols if c in df_filtered.columns]
         
         agg_df = df_filtered.groupby('Tanggal')[avail_cols].mean(numeric_only=True).reset_index().sort_values('Tanggal')
-        
         melted = agg_df.melt(id_vars='Tanggal', value_vars=avail_cols, var_name='Jam / Indikator', value_name='Nilai')
         
-        fig_line = px.line(
-            melted, x='Tanggal', y='Nilai', color='Jam / Indikator', 
-            markers=True, color_discrete_sequence=px.colors.qualitative.Alphabet
-        )
+        fig_line = px.line(melted, x='Tanggal', y='Nilai', color='Jam / Indikator', markers=True, color_discrete_sequence=PALET_KATEGORI)
         fig_line.update_traces(line=dict(width=2), marker=dict(size=6), hovertemplate="<b>%{y:.1f}</b>")
         fig_line = apply_wmo_style(fig_line, f"Grafik Harian {param_name} - {month_choice} ({selected_year})", "Tanggal", y_label)
         
         max_tanggal = int(agg_df['Tanggal'].max()) if not agg_df.empty else 31
-        fig_line.update_layout(
-            xaxis=dict(
-                tickmode='array', 
-                tickvals=list(range(1, max_tanggal + 1)),
-                range=[0.5, max_tanggal + 0.5] 
-            )
-        )
+        fig_line.update_layout(xaxis=dict(tickmode='array', tickvals=list(range(1, max_tanggal + 1)), range=[0.5, max_tanggal + 0.5]))
         st.plotly_chart(fig_line, use_container_width=True)
 
 # KELOMPOK 2: DATA DISTRIBUSI FREKUENSI (SUHU FREQ, VISIBILITAS, AWAN)
@@ -335,96 +372,76 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
         fig_line.update_layout(xaxis=dict(tickmode='linear', dtick=3))
         st.plotly_chart(fig_line, use_container_width=True)
 
-# KELOMPOK 3: MAWAR ANGIN (WMO WIND ROSE) & SIRKULASI MUSIMAN (BMKG)
+# KELOMPOK 3: MAWAR ANGIN (WMO WIND ROSE) & SIRKULASI MUSIMAN (DJF, MAM, JJAS, SON)
 elif selected_param == "Wind":
     df_w = filter_df(data['Wind'])
     if df_w.empty: 
         st.warning("⚠️ Data Wind kosong/tidak valid.")
     else:
-        tab_rose, tab_musim = st.tabs(["🧭 1. Mawar Angin (Wind Rose)", "🌦️ 2. Analisis Sirkulasi Musiman (BMKG ZOM)"])
+        tab_rose, tab_musim = st.tabs([
+            "🧭 1. Mawar Angin (Wind Rose Umum)", 
+            "🌦️ 2. Analisis Sirkulasi Musiman (DJF, MAM, JJAS, SON)"
+        ])
         
-        # --- TAB 1: POLAR WIND ROSE ---
+        # --- TAB 1: POLAR WIND ROSE UMUM ---
         with tab_rose:
-            dir_map = {'35-36-01':'N', '02-03-04':'NNE', '05-06-07':'ENE', '08-09-10':'E', '11-12-13':'ESE', '14-15-16':'SSE', '17-18-19':'S', '20-21-22':'SSW', '23-24-25':'WSW', '26-27-28':'W', '29-30-31':'WNW', '32-33-34':'NNW'}
-            rose_df = df_w[~df_w['Direction'].isin(['CALM', 'VARIABLE'])].copy()
-            if not rose_df.empty:
-                rose_df['Arah Mata Angin'] = rose_df['Direction'].map(dir_map)
-                
-                urutan_kecepatan = ['1-5', '6-10', '11-15', '16-20', '21-25', '26-30', '31-35', '36-45', '>45']
-                avail_speeds = [s for s in urutan_kecepatan if s in rose_df.columns]
-                
-                melt_rose = rose_df.melt(id_vars=['Arah Mata Angin'], value_vars=avail_speeds, var_name='Kecepatan (Knot)', value_name='Frekuensi (%)')
-                agg_rose = melt_rose.groupby(['Arah Mata Angin', 'Kecepatan (Knot)'])['Frekuensi (%)'].mean(numeric_only=True).reset_index()
-                
-                # Palet warna kustom meteorologi SANGAT KONTRAS
-                warna_kontras = ['#0000FF', '#00BFFF', '#00FA9A', '#FFD700', '#FF8C00', '#FF0000', '#C71585', '#8B008B', '#000000']
-                
-                fig_polar = px.bar_polar(
-                    agg_rose, 
-                    r="Frekuensi (%)", 
-                    theta="Arah Mata Angin", 
-                    color="Kecepatan (Knot)", 
-                    color_discrete_sequence=warna_kontras,
-                    category_orders={"Kecepatan (Knot)": urutan_kecepatan}, 
-                    template="plotly_white"
-                )
-                fig_polar = apply_wmo_style(fig_polar, f"Mawar Angin (Wind Rose) - {month_choice}", "", "")
-                
-                fig_polar.update_layout(
-                    polar=dict(
-                        angularaxis=dict(
-                            direction="clockwise",  
-                            rotation=90,            
-                            categoryorder="array",  
-                            categoryarray=['N', 'NNE', 'ENE', 'E', 'ESE', 'SSE', 'S', 'SSW', 'WSW', 'W', 'WNW', 'NNW']
-                        )
-                    )
-                )
-                st.plotly_chart(fig_polar, use_container_width=True)
+            fig_rose = create_wind_rose_figure(df_w, f"Mawar Angin (Wind Rose) - {month_choice} ({selected_year})")
+            if fig_rose:
+                st.plotly_chart(fig_rose, use_container_width=True)
+            else:
+                st.info("💡 Tidak ada data arah angin berkecepatan (selain Calm/Variable) untuk filter saat ini.")
 
-        # --- TAB 2: SIRKULASI MUSIMAN & ZOM BMKG ---
+        # --- TAB 2: SIRKULASI MUSIMAN (DJF, MAM, JJAS, SON) ---
         with tab_musim:
-            st.markdown("#### 🔄 Analisis Pergeseran Arah Angin (Monsunal Shift)")
-            st.info("💡 Data arah angin berfungsi sebagai bukti pendukung klimatologis atas datangnya Musim Hujan (Monsun Asia) dan Musim Kemarau (Monsun Australia) pada Zona Musim (ZOM) di wilayah pemantauan.")
+            st.markdown("#### 🔄 Analisis Pergeseran Arah Angin (Monsunal Shift - DJF, MAM, JJAS, SON)")
+            st.info("💡 Visualisasi ini menyajikan **Mawar Angin Musiman** dan **Profil Pergeseran Bulan** berdasarkan data pengamatan nyata untuk mengidentifikasi kedatangan Monsun Asia maupun Monsun Australia.")
             
-            # Pilihan Filter Khusus Tab Musim
-            pilihan_musim = st.selectbox(
-                "Pilih Kelompok Musim (Standar BMKG):", 
-                list(set(MUSIM_MAP.values())),
-                key="filter_musim_bmkg"
-            )
+            # Pilihan Filter Musim Standar WMO/BMKG
+            daftar_musim = sorted(list(set(MUSIM_MAP.values())))
+            pilihan_musim = st.selectbox("Pilih Kelompok Musim (Standar WMO & BMKG):", daftar_musim, key="filter_musim_bmkg")
             
             bulan_musim = [k for k, v in MUSIM_MAP.items() if v == pilihan_musim]
-            
-            # Ambil data dari dataset yang sudah dimuat (tanpa baca ulang Excel)
             df_wind_all = data['Wind'].copy()
+            
+            # Filter berdasarkan tahun jika terpilih di sidebar
+            if selected_year != "Semua Tahun":
+                df_wind_all = df_wind_all[df_wind_all['Tahun'] == int(selected_year)]
+                
             df_musim = df_wind_all[df_wind_all['Bulan'].isin(bulan_musim)]
             
             if not df_musim.empty:
-                # Group by Direction dan Bulan
-                df_grouped_musim = df_musim[~df_musim['Direction'].isin(["CALM", "VARIABLE"])].groupby(
-                    ['Direction', 'Bulan', 'Bulan_Idx']
-                )['Total'].mean(numeric_only=True).reset_index().sort_values('Bulan_Idx')
+                col_rose_musim, col_bar_musim = st.columns([1.1, 1.2])
                 
-                # Bar chart perbandingan bulan dalam satu musim
-                fig_musim = px.bar(
-                    df_grouped_musim,
-                    x="Direction",
-                    y="Total",
-                    color="Bulan",
-                    title=f"Distribusi Arah Angin pada Periode {pilihan_musim}",
-                    labels={
-                        "Total": "Frekuensi (%)",
-                        "Direction": "Sektor Arah Angin (30°)"
-                    },
-                    barmode="group",
-                    color_discrete_sequence=px.colors.qualitative.Safe
-                )
-                fig_musim = apply_wmo_style(fig_musim, f"Profil Arah Angin: {pilihan_musim}", "Sektor Arah Angin (30°)", "Frekuensi (%)")
-                st.plotly_chart(fig_musim, use_container_width=True)
+                # Sisi Kiri: Mawar Angin Khusus Musim Terpilih (DJF / MAM / JJAS / SON)
+                with col_rose_musim:
+                    nama_singkat = pilihan_musim.split(" ")[0]
+                    fig_rose_musim = create_wind_rose_figure(df_musim, f"Wind Rose Musim {nama_singkat}")
+                    if fig_rose_musim:
+                        st.plotly_chart(fig_rose_musim, use_container_width=True)
+                    else:
+                        st.info("💡 Tidak ada data arah angin berkecepatan untuk musim terpilih.")
                 
-                # Tampilkan juga statistik angin tenang (Calm Wind) untuk analisis penerbangan/konvektif
+                # Sisi Kanan: Grafik Perbandingan Antar Bulan dalam Musim Tersebut
+                with col_bar_musim:
+                    df_grouped_musim = df_musim[~df_musim['Direction'].isin(["CALM", "VARIABLE"])].groupby(
+                        ['Direction', 'Bulan', 'Bulan_Idx']
+                    )['Total'].mean(numeric_only=True).reset_index().sort_values('Bulan_Idx')
+                    
+                    fig_musim = px.bar(
+                        df_grouped_musim, x="Direction", y="Total", color="Bulan",
+                        title=f"Distribusi Arah Angin: {pilihan_musim.split('|')[0].strip()}",
+                        labels={"Total": "Frekuensi (%)", "Direction": "Sektor Arah Angin (30°)"},
+                        barmode="group", color_discrete_sequence=PALET_KATEGORI
+                    )
+                    fig_musim = apply_wmo_style(fig_musim, f"Pergeseran Bulanan ({pilihan_musim.split(' ')[0]})", "Sektor Arah Angin (30°)", "Frekuensi (%)")
+                    st.plotly_chart(fig_musim, use_container_width=True)
+                
+                # Callout Indikator Angin Tenang (Calm Wind)
                 calm_val = df_musim[df_musim['Direction'] == 'CALM']['Total'].mean()
-                st.markdown(f"**🌀 Frekuensi Rata-rata Angin Tenang (*Calm Wind*) pada Musim Ini:** `{calm_val:.2f}%`")
+                st.markdown(f"""
+                    <div style="background-color: rgba(46, 204, 64, 0.15); padding: 12px 18px; border-radius: 8px; border-left: 5px solid #2ECC40; color: #0B3C5D; font-weight: 500;">
+                        🌀 <b>Frekuensi Rata-rata Angin Tenang (<i>Calm Wind</i>) pada Periode Musim Ini:</b> <code style="font-size: 16px; color: #111;">{calm_val:.2f}%</code>
+                    </div>
+                """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Data untuk kelompok musim yang dipilih tidak tersedia atau kosong.")
+                st.warning("⚠️ Data untuk kelompok musim yang dipilih tidak tersedia atau kosong pada file sumber.")
