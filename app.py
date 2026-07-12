@@ -16,67 +16,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Pilihan Tema di Sidebar untuk mengatur adaptasi grafik
-st.sidebar.markdown("### 🎨 Pengaturan Tampilan")
-theme_mode = st.sidebar.radio("Pilih Tema Antarmuka:", ["Light Mode", "Dark Mode"], horizontal=True)
+# Toggle Tema di Sidebar
+theme_mode = st.sidebar.radio("🌓 Mode Tampilan:", ["Dark Mode", "Light Mode"], horizontal=True)
+is_dark = theme_mode == "Dark Mode"
 
-# CSS Dinamis untuk Light dan Dark Mode
-if theme_mode == "Dark Mode":
-    bg_color = "#0e1117"
-    card_bg = "#161b22"
-    text_color = "#e6edf3"
-    sub_text = "#8b949e"
-    border_color = "#30363d"
-    icao_bg = "#1f242d"
-    icao_border = "#388bfd"
-else:
-    bg_color = "#ffffff"
-    card_bg = "#f8f9fa"
-    text_color = "#1f2328"
-    sub_text = "#656d76"
-    border_color = "#d0d7de"
-    icao_bg = "#f1f8ff"
-    icao_border = "#0969da"
+# Warna Dinamis Berdasarkan Tema
+bg_color_main = "#0E1117" if is_dark else "#FFFFFF"
+text_color_main = "#FAFAFA" if is_dark else "#0F1116"
+panel_bg = "#1E2A38" if is_dark else "#F8F9FA"
+border_col = "#334155" if is_dark else "#E9ECEF"
+chart_template = "plotly_dark" if is_dark else "plotly_white"
 
 st.markdown(f"""
     <style>
         .main .block-container {{ padding-top: 1.5rem; padding-bottom: 2rem; }}
-        
-        /* Banner Header Takts TNI AU */
-        .tniau-banner {{
-            background: linear-gradient(135deg, #071e3d 0%, #1f4287 50%, #278ea5 100%);
-            padding: 28px; border-radius: 12px; color: white; margin-bottom: 25px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.25); border-left: 8px solid #f5af19;
-            position: relative; overflow: hidden;
-        }}
-        .tniau-banner h1 {{ margin: 0; font-size: 28px; font-weight: 800; letter-spacing: 1px; color: #ffffff; }}
-        .tniau-banner p {{ margin: 8px 0 0 0; font-size: 15px; opacity: 0.95; font-weight: 300; line-height: 1.5; }}
-        
-        /* Tactical Card Estetik */
-        .tactical-card {{
-            background-color: {card_bg}; border: 1px solid {border_color};
-            padding: 20px; border-radius: 10px; margin-bottom: 15px;
-            color: {text_color}; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            transition: all 0.3s ease;
-        }}
-        .tactical-card:hover {{ border-color: #328CC1; transform: translateY(-2px); }}
-        .tactical-title {{ font-size: 16px; font-weight: 700; color: #328CC1; margin-bottom: 10px; }}
-        
-        /* Styling Interpretasi ICAO Adaptif */
-        .icao-box {{
-            background-color: {icao_bg}; border: 1px solid {border_color};
-            border-left: 6px solid {icao_border}; padding: 18px 22px;
-            border-radius: 8px; margin-top: 20px; margin-bottom: 25px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: {text_color};
-        }}
-        .icao-title {{ font-size: 14px; font-weight: 700; color: #328CC1; margin-bottom: 8px; }}
-        
-        /* WMO Table Adaptif */
-        .wmo-table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; color: {text_color}; }}
-        .wmo-table th {{ background-color: #071e3d; color: white; padding: 10px; text-align: left; }}
-        .wmo-table td {{ padding: 8px 10px; border-bottom: 1px solid {border_color}; }}
-        
-        div[data-testid="stMetricValue"] {{ color: #328CC1; font-size: 24px; font-weight: bold; }}
+        div[data-testid="stMetricValue"] {{ color: #0B3C5D; font-size: 24px; font-weight: bold; }}
+        .stAlert {{ border-radius: 8px; }}
+        .wmo-table {{ width: 100%; border-collapse: collapse; font-size: 13px; color: {text_color_main}; }}
+        .wmo-table th {{ background-color: #0B3C5D; color: white; padding: 8px; text-align: left; border: 1px solid #334155; }}
+        .wmo-table td {{ padding: 8px; border-bottom: 1px solid {border_col}; border-left: 1px solid {border_col}; border-right: 1px solid {border_col}; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -235,11 +193,10 @@ def load_all_data():
             finally:
                 if xls:
                     xls.close()
-    
     gc.collect()
     return datasets
 
-with st.spinner("🔄 Sinkronisasi Basis Data Alfanumerik Klasifikasi WMO..."):
+with st.spinner("🔄 Sinkronisasi Basis Data..."):
     data = load_all_data()
 
 # ==========================================
@@ -248,7 +205,7 @@ with st.spinner("🔄 Sinkronisasi Basis Data Alfanumerik Klasifikasi WMO..."):
 st.sidebar.markdown("### 🧭 Panel Kendali Klimatologi")
 st.sidebar.markdown("---")
 param_options = {
-    "Home": "🏠 0. Beranda & Informasi Operasional (TNI AU)",
+    "Home": "🏠 Beranda Utama",
     "TempMaxMin": "1. Suhu Udara Synoptic (°C)", 
     "TempFreq": "2. Distribusi Frekuensi Suhu (%)",
     "RH": "3. Kelembapan Relatif / RH (%)", 
@@ -256,14 +213,13 @@ param_options = {
     "HS": "5. HS / Tinggi Dasar Awan (%)", 
     "Wind": "6. Sirkulasi Wind & Analisis Monsun"
 }
-selected_param = st.sidebar.selectbox("Pilih Modul / Parameter:", list(param_options.keys()), format_func=lambda x: param_options[x])
 
+selected_param = st.sidebar.selectbox("Navigasi Sistem:", list(param_options.keys()), format_func=lambda x: param_options[x])
+
+# Sembunyikan filter bulan dan tahun jika di menu Home
 if selected_param != "Home":
     month_choice = st.sidebar.selectbox("Filter Analisis Bulan:", ["Semua Bulan"] + MONTHS_ID)
     selected_year = st.sidebar.selectbox("Filter Analisis Tahun:", ["Semua Tahun"] + [2021, 2022, 2023, 2024, 2025])
-else:
-    month_choice = "Semua Bulan"
-    selected_year = "Semua Tahun"
 
 def filter_df(df, ignore_month=False):
     if df.empty: return df
@@ -273,32 +229,29 @@ def filter_df(df, ignore_month=False):
     return res
 
 # ==========================================
-# 4. TATA LETAK GRAFIK ADAPTIF (DARK/LIGHT)
+# 4. TATA LETAK GRAFIK & FUNGSI BANTU
 # ==========================================
 def apply_wmo_style(fig, title_text, x_label, y_label):
-    # Adaptasi warna plotly sesuai tema antarmuka
-    plotly_template = "plotly_dark" if theme_mode == "Dark Mode" else "plotly_white"
-    font_color = "#e6edf3" if theme_mode == "Dark Mode" else "#1f2328"
-    grid_color = "rgba(211,211,211,0.15)" if theme_mode == "Dark Mode" else "rgba(211,211,211,0.5)"
-    bg_legend = "rgba(22, 27, 34, 0.85)" if theme_mode == "Dark Mode" else "rgba(255, 255, 255, 0.85)"
-    border_legend = "rgba(48, 54, 61, 0.8)" if theme_mode == "Dark Mode" else "rgba(211, 211, 211, 0.6)"
-    plot_bg = "rgba(22, 27, 34, 0.4)" if theme_mode == "Dark Mode" else "rgba(242, 244, 245, 0.4)"
-
+    grid_col = "rgba(255,255,255,0.2)" if is_dark else "rgba(211,211,211,0.5)"
+    font_col = "#60A5FA" if is_dark else "#0B3C5D"
+    legend_bg = "rgba(14,17,23,0.85)" if is_dark else "rgba(255, 255, 255, 0.85)"
+    
     fig.update_layout(
-        title=dict(text=f"<b>{title_text}</b>", font=dict(size=17, color=font_color)),
+        title=dict(text=f"<b>{title_text}</b>", font=dict(size=17, color=font_col)),
         xaxis_title=f"<b>{x_label}</b>", yaxis_title=f"<b>{y_label}</b>",
         margin=dict(l=50, r=160, t=70, b=80),
-        template=plotly_template, hovermode="x unified",
+        template=chart_template, 
+        hovermode="x unified",
         legend=dict(
             title="<b>Komponen Data:</b>",
             orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
-            bgcolor=bg_legend, bordercolor=border_legend, borderwidth=1
+            bgcolor=legend_bg, bordercolor=grid_col, borderwidth=1
         ),
-        plot_bgcolor=plot_bg,
+        plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)"
     )
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor=grid_color)
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor=grid_color)
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor=grid_col)
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor=grid_col)
     return fig
 
 def create_wind_rose_figure(rose_df, title_text):
@@ -313,91 +266,86 @@ def create_wind_rose_figure(rose_df, title_text):
     melt_rose = df_clean.melt(id_vars=["Arah Mata Angin"], value_vars=avail_speeds, var_name="Kecepatan (Knot)", value_name="Frekuensi (%)")
     agg_rose = melt_rose.groupby(["Arah Mata Angin", "Kecepatan (Knot)"])["Frekuensi (%)"].mean(numeric_only=True).reset_index()
     
-    plotly_template = "plotly_dark" if theme_mode == "Dark Mode" else "plotly_white"
-    grid_color = "rgba(211,211,211,0.2)" if theme_mode == "Dark Mode" else "rgba(211, 211, 211, 0.6)"
-
     fig_polar = px.bar_polar(
         agg_rose, r="Frekuensi (%)", theta="Arah Mata Angin", color="Kecepatan (Knot)",
-        color_discrete_sequence=["#001f3f", "#0074D9", "#2ECC40", "#FFDC00", "#FF851B", "#FF4136", "#F012BE", "#B10DC9", "#111111"],
-        category_orders={"Kecepatan (Knot)": speeds}, template=plotly_template
+        color_discrete_sequence=["#001f3f", "#0074D9", "#2ECC40", "#FFDC00", "#FF851B", "#FF4136", "#F012BE", "#B10DC9", "#111111"] if not is_dark else ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316", "#FFFFFF"],
+        category_orders={"Kecepatan (Knot)": speeds}, template=chart_template
     )
     fig_polar = apply_wmo_style(fig_polar, title_text, "", "")
+    grid_col = "rgba(255,255,255,0.2)" if is_dark else "rgba(211,211,211,0.5)"
     fig_polar.update_layout(
         legend=dict(title="<b>Kecepatan (Knot):</b>", orientation="v", yanchor="top", y=1, xanchor="left", x=1.08),
         polar=dict(
+            bgcolor="rgba(0,0,0,0)",
             angularaxis=dict(direction="clockwise", rotation=90, categoryorder="array", categoryarray=list(dir_map.values())),
-            radialaxis=dict(showgrid=True, gridcolor=grid_color, ticksuffix="%"),
-            bgcolor="rgba(0,0,0,0)"
+            radialaxis=dict(showgrid=True, gridcolor=grid_col, ticksuffix="%")
         )
     )
     return fig_polar
 
 def render_icao_interpretation(title, content, highlight):
+    # Dynamic styling for dark/light mode
+    bg_div = "#16202B" if is_dark else "#F8F9FA"
+    text_div = "#E2E8F0" if is_dark else "#2C3E50"
+    title_div = "#60A5FA" if is_dark else "#0B3C5D"
+    border_left = "#3B82F6" if is_dark else "#0074D9"
+    border_div = "#334155" if is_dark else "#E9ECEF"
+    warn_text = "#F87171" if is_dark else "#D9534F"
+    dash_col = "#475569" if is_dark else "#CBD5E1"
+    
     st.markdown(f"""
-        <div class="icao-box">
-            <div class="icao-title">
+        <div style="background-color: {bg_div}; border: 1px solid {border_div}; border-left: 5px solid {border_left}; padding: 16px 20px; border-radius: 8px; margin-top: 15px; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">
+            <div style="font-size: 14px; font-weight: 700; color: {title_div}; margin-bottom: 8px;">
                 📋 INTERPRETASI KLIMATOLOGIS OPERASIONAL ({title.upper()})
             </div>
-            <div style="font-size: 13.5px; line-height: 1.6;">
+            <div style="font-size: 13.5px; color: {text_div}; line-height: 1.6;">
                 {content}
             </div>
-            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed #CBD5E1; font-size: 13px; color: #FF4136; font-weight: 600;">
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed {dash_col}; font-size: 13px; color: {warn_text}; font-weight: 600;">
                 ⚠️ Dampak Penerbangan (ICAO Annex 3 / BMKG): {highlight}
             </div>
         </div>
     """, unsafe_allow_html=True)
 
+
 # ==========================================
 # 5. DISPLAY UTAMA & INTERPRETASI DINAMIS
 # ==========================================
 
-# --- RENDER MENU HOME (BERANDA) ---
+# 5.A. RENDER BERANDA UTAMA (HOME)
 if selected_param == "Home":
     st.markdown("""
-        <div class="tniau-banner">
-            <h1>🛡️ SISTEM INFORMASI METEOROLOGI TAKTIS & KLIMATOLOGI AERODROME</h1>
-            <p>Dukungan Analisis Cuaca Terintegrasi untuk Keselamatan Penerbangan dan Operasi Udara Militer.</p>
+        <div style="background: linear-gradient(135deg, #021B38 0%, #08335E 50%, #17548A 100%); 
+                    padding: 45px 30px; 
+                    border-radius: 12px; 
+                    color: white; 
+                    text-align: center; 
+                    box-shadow: 0 8px 16px rgba(0,0,0,0.4); 
+                    border-bottom: 5px solid #FFD700;
+                    margin-bottom: 30px;">
+            <h1 style="margin: 0; font-size: 38px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;">Sistem Informasi Meteorologi Penerbangan</h1>
+            <p style="margin: 12px 0 20px 0; font-size: 18px; font-weight: 300; letter-spacing: 0.5px; opacity: 0.95;">
+                Pusat Analisis Data Klimatologi Taktis & Dukungan Keselamatan Operasi Udara
+            </p>
+            <hr style="border-top: 1px solid rgba(255,255,255,0.2); width: 60%; margin: auto;">
+            <p style="margin-top: 25px; font-size: 16px; font-weight: 400; font-style: italic; color: #F1C40F;">
+                "Swa Bhuwana Paksa"
+            </p>
         </div>
     """, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("""
-            <div class="tactical-card">
-                <div class="tactical-title">🎯 Tujuan Operasional</div>
-                <div style="font-size: 13.5px; line-height: 1.5;">
-                    Menyajikan ringkasan klimatologi bandara (ACS) berstandar WMO dan ICAO untuk menganalisis karakteristik atmosfer lokal, meminimalkan risiko cuaca ekstrem, serta mendukung pengambilan keputusan taktis penerbangan.
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        st.info("🌡️ **Analisis Termal & Visibilitas**\n\nMenyajikan pemetaan suhu, jarak pandang, dan tinggi dasar awan untuk penentuan status VFR/IFR.")
     with col2:
-        st.markdown("""
-            <div class="tactical-card">
-                <div class="tactical-title">🛰️ Integrasi Parameter</div>
-                <div style="font-size: 13.5px; line-height: 1.5;">
-                    Menganalisis 6 parameter utama aerodrome: Suhu Udara Synoptic, Frekuensi Termal, Kelembapan Relatif (RH), Jarak Pandang (Visibility), Tinggi Dasar Awan (Cloud Ceiling), dan Sirkulasi Angin 3600.
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        st.success("🧭 **Wind Rose & Monsun**\n\nSpektrum arah dan kecepatan angin historis untuk rekomendasi operasional Landas Pacu (Runway).")
     with col3:
-        st.markdown("""
-            <div class="tactical-card">
-                <div class="tactical-title">⚡ Spesifikasi Sistem</div>
-                <div style="font-size: 13.5px; line-height: 1.5;">
-                    Dibangun menggunakan pemrosesan data numerik berkecepatan tinggi, integrasi de-koding otomatis tabel WMO 3600, serta rendering visual interaktif yang optimal pada mode siang maupun malam hari.
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-        
+        st.warning("⚠️ **Peringatan Dini Operasional**\n\nInterpretasi ICAO terintegrasi guna mendeteksi ancaman cuaca terhadap keselamatan kru dan armada.")
+    
     st.markdown("---")
-    st.markdown("#### 📌 Petunjuk Penggunaan Sistem")
-    st.markdown("""
-    1. **Pilih Parameter Meteorologi**: Gunakan menu <i>dropdown</i> pada navigasi sidebar di sebelah kiri untuk memilih modul analisis yang diinginkan (Suhu, RH, Visibility, Awan, atau Angin).
-    2. **Filter Waktu Interaktif**: Tentukan rentang analisis berdasarkan bulan tertentu atau pengamatan tahunan (2021–2025).
-    3. **Analisis Taktis**: Baca panel **Interpretasi Klimatologis Operasional** di bagian bawah grafik untuk mengetahui dampak langsung terhadap performa pesawat dan prosedur penerbangan.
-    """, unsafe_allow_html=True)
+    st.markdown(f"**Silakan pilih menu di panel sebelah kiri untuk memulai analisis data meteorologi.**")
 
-# --- RENDER MODUL PARAMETER LAINNYA ---
+# 5.B. RENDER DASHBOARD (PARAMETER LAINNYA)
 else:
     st.markdown(f"### 📊 Dashboard Analisis: {param_options[selected_param].split('. ')[1]}")
     st.markdown("---")
