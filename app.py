@@ -74,20 +74,24 @@ SEKTOR_DETIL_MAP = {
 # ==========================================
 # 2. DATA PROCESSING ENGINE (ROBUST PARSERS)
 # ==========================================
+def clean_num_str(val):
+    if pd.isna(val): return ""
+    return str(val).strip().replace(',', '.').split('.')[0]
+
 def parse_synoptic(df):
     valid_rows = []
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         try:
-            val0 = str(row.iloc[0]).strip().replace(',', '.')
-            val1 = str(row.iloc[1]).strip().replace(',', '.')
-            if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()):
+            val0 = clean_num_str(row.iloc[0])
+            val1 = clean_num_str(row.iloc[1])
+            if not (val0.lstrip('-').isdigit() and val1.lstrip('-').isdigit()):
                 continue
-            v0, v1 = float(val0), float(val1)
+            v0, v1 = int(val0), int(val1)
             rest_vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[2:].values]
             if 2000 <= v0 <= 2100 and 1 <= v1 <= 31:
-                valid_rows.append([int(v0), int(v1)] + rest_vals)
+                valid_rows.append([v0, v1] + rest_vals)
             elif 1 <= v0 <= 31 and 2000 <= v1 <= 2100:
-                valid_rows.append([int(v1), int(v0)] + rest_vals)
+                valid_rows.append([v1, v0] + rest_vals)
         except Exception:
             continue
     if not valid_rows: return pd.DataFrame()
@@ -101,18 +105,18 @@ def parse_synoptic(df):
 
 def parse_hourly_freq(df, col_names):
     valid_data = []
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         try:
-            val0 = str(row.iloc[0]).strip().replace(',', '.')
-            val1 = str(row.iloc[1]).strip().replace(',', '.')
-            if not (val0.replace('.', '', 1).isdigit() and val1.replace('.', '', 1).isdigit()):
+            val0 = clean_num_str(row.iloc[0])
+            val1 = clean_num_str(row.iloc[1])
+            if not (val0.lstrip('-').isdigit() and val1.lstrip('-').isdigit()):
                 continue
-            v0, v1 = float(val0), float(val1)
+            v0, v1 = int(val0), int(val1)
             rest_vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[2:].values]
             if 0 <= v0 <= 23 and 2000 <= v1 <= 2100:
-                valid_data.append([int(v1), int(v0)] + rest_vals)
+                valid_data.append([v1, v0] + rest_vals)
             elif 2000 <= v0 <= 2100 and 0 <= v1 <= 23:
-                valid_data.append([int(v0), int(v1)] + rest_vals)
+                valid_data.append([v0, v1] + rest_vals)
         except Exception:
             continue
     if not valid_data: return pd.DataFrame()
@@ -126,18 +130,21 @@ def parse_wind(df):
     valid_data = []
     current_year = 2021
     wind_sectors = list(SEKTOR_DETIL_MAP.keys())
-    for idx, row in df.iterrows():
+    for _, row in df.iterrows():
         try:
-            val0 = str(row.iloc[0]).strip()
-            val1 = str(row.iloc[1]).strip().replace(" ", "").upper()
-            val2_str = str(row.iloc[2]).strip().replace(" ", "").upper() if len(row) > 2 else ""
+            val0 = clean_num_str(row.iloc[0])
+            val1 = str(row.iloc[1]).strip().replace(" ", "").upper() if pd.notna(row.iloc[1]) else ""
+            val2_str = str(row.iloc[2]).strip().replace(" ", "").upper() if len(row) > 2 and pd.notna(row.iloc[2]) else ""
+            
             if val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100:
                 current_year = int(val0)
+                
             target_dir, start_col_idx = None, 2
             if val1 in ["CALM", "VARIABLE"] or val1 in wind_sectors:
                 target_dir, start_col_idx = val1, 2
             elif val2_str in ["CALM", "VARIABLE"] or val2_str in wind_sectors:
                 target_dir, start_col_idx = val2_str, 3
+                
             if target_dir:
                 yr = int(val0) if (val0.isdigit() and len(val0) == 4 and 2000 <= int(val0) <= 2100) else current_year
                 vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[start_col_idx:].values]
@@ -213,13 +220,11 @@ def apply_wmo_style(fig, title_text, x_label, y_label):
     fig.update_layout(
         title=dict(text=f"<b>{title_text}</b>", font=dict(size=17, color="#0B3C5D")),
         xaxis_title=f"<b>{x_label}</b>", yaxis_title=f"<b>{y_label}</b>",
-        margin=dict(l=50, r=160, t=70, b=80), # Margin kanan (r=160) diperluas untuk tempat legenda vertikal
+        margin=dict(l=50, r=160, t=70, b=80),
         template="plotly_white", hovermode="x unified",
         legend=dict(
             title="<b>Komponen Data:</b>",
-            orientation="v", # Legenda vertikal di sebelah kanan
-            yanchor="top", y=1,
-            xanchor="left", x=1.02,
+            orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
             bgcolor="rgba(255, 255, 255, 0.85)",
             bordercolor="rgba(211, 211, 211, 0.6)", borderwidth=1
         ),
@@ -293,26 +298,31 @@ if selected_param in ["TempMaxMin", "RH"]:
         fig_line.update_traces(line=dict(width=2), marker=dict(size=6), hovertemplate="<b>%{y:.1f}</b>")
         fig_line = apply_wmo_style(fig_line, f"Trend Harian Real-Time - {month_choice} ({selected_year})", "Tanggal Pengamatan", y_lbl)
         fig_line.update_layout(xaxis=dict(tickmode="linear", dtick=1, range=[0.5, int(agg_df["Tanggal"].max())+0.5]))
-        st.plotly_chart(fig_line, use_container_width=True)
         
-        # Interpretasi Dinamis TempMaxMin / RH
+        # PERBAIKAN: Menggunakan width="stretch" menggantikan use_container_width=True
+        st.plotly_chart(fig_line, width="stretch")
+        
+        # Interpretasi Dinamis TempMaxMin / RH yang Aman dari Error
         try:
-            if selected_param == "TempMaxMin":
+            if selected_param == "TempMaxMin" and "Max" in agg_df and "Min" in agg_df:
                 avg_max, avg_min = agg_df["Max"].mean(numeric_only=True), agg_df["Min"].mean(numeric_only=True)
                 ext_max = agg_df["Max"].max(numeric_only=True)
-                render_icao_interpretation(
-                    "Suhu Udara Synoptic",
-                    f"Rata-rata suhu maksimum mencapai <b>{avg_max:.1f}°C</b> dengan ekstrem tertinggi <b>{ext_max:.1f}°C</b>, sementara rata-rata minimum berada pada <b>{avg_min:.1f}°C</b>. Rentang diurnal ini menunjukkan karakteristik pembentukan lapisan batas atmosfer yang aktif pada siang hari.",
-                    f"Suhu ekstrem {ext_max:.1f}°C meningkatkan *Density Altitude* (penurunan kepadatan udara), yang secara langsung memperpanjang jarak lepas landas (*take-off run*) dan mengurangi daya angkat (*lift*) pesawat."
-                )
-            else:
+                if pd.notna(avg_max) and pd.notna(ext_max):
+                    render_icao_interpretation(
+                        "Suhu Udara Synoptic",
+                        f"Rata-rata suhu maksimum mencapai <b>{avg_max:.1f}°C</b> dengan ekstrem tertinggi <b>{ext_max:.1f}°C</b>, sementara rata-rata minimum berada pada <b>{avg_min:.1f}°C</b>. Rentang diurnal ini menunjukkan karakteristik pembentukan lapisan batas atmosfer yang aktif pada siang hari.",
+                        f"Suhu ekstrem {ext_max:.1f}°C meningkatkan *Density Altitude* (penurunan kepadatan udara), yang secara langsung memperpanjang jarak lepas landas (*take-off run*) dan mengurangi daya angkat (*lift*) pesawat."
+                    )
+            elif selected_param == "RH":
                 avg_rh = agg_df["Daily_Mean"].mean(numeric_only=True) if "Daily_Mean" in agg_df else agg_df.mean(numeric_only=True).mean()
-                render_icao_interpretation(
-                    "Kelembapan Relatif (RH)",
-                    f"Kelembapan relatif rata-rata harian berada pada level <b>{avg_rh:.1f}%</b>. Pola saturasi tertinggi konsisten terjadi pada pengamatan dini hari (21.00 - 00.00 UTC / 04.00 - 07.00 WIB) akibat pendinginan radiatif permukaan.",
-                    "Kelembapan tinggi (>85%) pada dini/pagi hari memicu probabilitas tinggi pembentukan kabut radiasi (*radiation fog*) dan embun, yang berpotensi menurunkan *Runway Visual Range* (RVR) di bawah batas minimum VFR."
-                )
-        except Exception: pass
+                if pd.notna(avg_rh):
+                    render_icao_interpretation(
+                        "Kelembapan Relatif (RH)",
+                        f"Kelembapan relatif rata-rata harian berada pada level <b>{avg_rh:.1f}%</b>. Pola saturasi tertinggi konsisten terjadi pada pengamatan dini hari (21.00 - 00.00 UTC / 04.00 - 07.00 WIB) akibat pendinginan radiatif permukaan.",
+                        "Kelembapan tinggi (>85%) pada dini/pagi hari memicu probabilitas tinggi pembentukan kabut radiasi (*radiation fog*) dan embun, yang berpotensi menurunkan *Runway Visual Range* (RVR) di bawah batas minimum VFR."
+                    )
+        except Exception as e: 
+            pass
 
 elif selected_param in ["TempFreq", "Vis", "HS"]:
     df_filtered = filter_df(data[selected_param])
@@ -337,32 +347,37 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
         fig_freq.update_traces(line=dict(width=2.5), marker=dict(size=7), hovertemplate="<b>%{y:.2f}%</b>")
         fig_freq = apply_wmo_style(fig_freq, f"Pola Distribusi Per Jam Observasi (UTC) - {month_choice}", "Jam Synoptic (UTC)", y_lbl)
         fig_freq.update_layout(xaxis=dict(tickmode="linear", dtick=3))
-        st.plotly_chart(fig_freq, use_container_width=True)
         
-        # Interpretasi Dinamis Freq / Vis / HS
+        # PERBAIKAN: Menggunakan width="stretch"
+        st.plotly_chart(fig_freq, width="stretch")
+        
+        # Interpretasi Dinamis yang Kebal Null/Empty
         try:
-            dom_cat = hm_df.groupby("Kategori Batas")["Persentase"].mean().idxmax()
-            dom_val = hm_df.groupby("Kategori Batas")["Persentase"].mean().max()
-            if selected_param == "TempFreq":
-                render_icao_interpretation(
-                    "Distribusi Frekuensi Suhu",
-                    f"Distribusi termal paling dominan berada pada rentang suhu <b>{dom_cat} °C</b> dengan frekuensi kemunculan rata-rata <b>{dom_val:.1f}%</b> di seluruh jam pengamatan synoptic.",
-                    "Konsentrasi frekuensi pada suhu >30°C menuntut kewaspadaan terhadap *heat stress* pada kru *flightline* serta penurunan daya dorong (*thrust*) mesin turbin pesawat."
-                )
-            elif selected_param == "Vis":
-                vis_low = hm_df[hm_df["Kategori Batas"].isin(["<200", "<400", "<600", "<800", "<1500"])]["Persentase"].mean()
-                render_icao_interpretation(
-                    "Jarak Pandang / Visibility",
-                    f"Kondisi jarak pandang didominasi oleh kategori <b>{dom_cat} meter</b> ({dom_val:.1f}%). Akumulasi frekuensi jarak pandang buruk (<1500m) tercatat sebesar <b>{vis_low:.2f}%</b>, umumnya terjadi pada fase transisi subuh-pagi.",
-                    "Jarak pandang di bawah 1500 meter merupakan batas kritis ICAO yang mewajibkan pemberlakuan prosedur penerbangan instrumen (IFR) atau penundaan operasi VFR taktis."
-                )
-            else:
-                render_icao_interpretation(
-                    "Tinggi Dasar Awan / HS",
-                    f"Frekuensi kejadian dasar awan terendah didominasi oleh rentang <b>{dom_cat} FT</b> dengan rata-rata probabilitas <b>{dom_val:.1f}%</b>.",
-                    "Tinggi dasar awan di bawah 1500 FT (khususnya <1000 FT) masuk dalam parameter *Instrument Meteorological Conditions* (IMC), yang membutuhkan kesiapan sistem pemandu pendaratan instrumen (ILS/VOR)."
-                )
-        except Exception: pass
+            mean_series = hm_df.groupby("Kategori Batas")["Persentase"].mean().dropna()
+            if not mean_series.empty:
+                dom_cat = mean_series.idxmax()
+                dom_val = mean_series.max()
+                if selected_param == "TempFreq":
+                    render_icao_interpretation(
+                        "Distribusi Frekuensi Suhu",
+                        f"Distribusi termal paling dominan berada pada rentang suhu <b>{dom_cat} °C</b> dengan frekuensi kemunculan rata-rata <b>{dom_val:.1f}%</b> di seluruh jam pengamatan synoptic.",
+                        "Konsentrasi frekuensi pada suhu >30°C menuntut kewaspadaan terhadap *heat stress* pada kru *flightline* serta penurunan daya dorong (*thrust*) mesin turbin pesawat."
+                    )
+                elif selected_param == "Vis":
+                    vis_low = hm_df[hm_df["Kategori Batas"].isin(["<200", "<400", "<600", "<800", "<1500"])]["Persentase"].mean()
+                    render_icao_interpretation(
+                        "Jarak Pandang / Visibility",
+                        f"Kondisi jarak pandang didominasi oleh kategori <b>{dom_cat} meter</b> ({dom_val:.1f}%). Akumulasi frekuensi jarak pandang buruk (<1500m) tercatat sebesar <b>{vis_low:.2f}%</b>, umumnya terjadi pada fase transisi subuh-pagi.",
+                        "Jarak pandang di bawah 1500 meter merupakan batas kritis ICAO yang mewajibkan pemberlakuan prosedur penerbangan instrumen (IFR) atau penundaan operasi VFR taktis."
+                    )
+                else:
+                    render_icao_interpretation(
+                        "Tinggi Dasar Awan / HS",
+                        f"Frekuensi kejadian dasar awan terendah didominasi oleh rentang <b>{dom_cat} FT</b> dengan rata-rata probabilitas <b>{dom_val:.1f}%</b>.",
+                        "Tinggi dasar awan di bawah 1500 FT (khususnya <1000 FT) masuk dalam parameter *Instrument Meteorological Conditions* (IMC), yang membutuhkan kesiapan sistem pemandu pendaratan instrumen (ILS/VOR)."
+                    )
+        except Exception: 
+            pass
 
 elif selected_param == "Wind":
     df_w = filter_df(data["Wind"])
@@ -373,8 +388,11 @@ elif selected_param == "Wind":
         
         with tab_rose:
             fig_rose = create_wind_rose_figure(df_w, f"Mawar Angin Standar Penerbangan - {month_choice} ({selected_year})")
-            if fig_rose: st.plotly_chart(fig_rose, use_container_width=True)
-            else: st.info("💡 Tidak ada komponen angin terdeteksi selain data CALM/VARIABLE.")
+            if fig_rose: 
+                # PERBAIKAN: Menggunakan width="stretch"
+                st.plotly_chart(fig_rose, width="stretch")
+            else: 
+                st.info("💡 Tidak ada komponen angin terdeteksi selain data CALM/VARIABLE.")
             
         with tab_musim:
             with st.expander("📖 PANDUAN REFERENSI DE-KODING SEKTOR ARAH ANGIN WMO CODE TABLE 3600"):
@@ -401,7 +419,9 @@ elif selected_param == "Wind":
                 col_r, col_b = st.columns([1.0, 1.2])
                 with col_r:
                     fig_rm = create_wind_rose_figure(df_musim, f"Wind Rose Profil Musim {pilihan_musim.split(' ')[0]}")
-                    if fig_rm: st.plotly_chart(fig_rm, use_container_width=True)
+                    if fig_rm: 
+                        # PERBAIKAN: Menggunakan width="stretch"
+                        st.plotly_chart(fig_rm, width="stretch")
                     
                 with col_b:
                     df_g_musim = df_musim[~df_musim["Direction"].isin(["CALM", "VARIABLE"])].groupby(["Direction", "Bulan", "Bulan_Idx"])["Total"].mean(numeric_only=True).reset_index().sort_values("Bulan_Idx")
@@ -414,17 +434,22 @@ elif selected_param == "Wind":
                     )
                     fig_m_bar = apply_wmo_style(fig_m_bar, f"Variabilitas Bulanan Sektor WMO 3600 ({pilihan_musim.split(' ')[0]})", "Sektor Arah Angin & Sudut Kompas WMO 3600", "Persentase Kejadian / Frekuensi (%)")
                     fig_m_bar.update_xaxes(type="category", categoryorder="array", categoryarray=list(SEKTOR_DETIL_MAP.values()))
-                    st.plotly_chart(fig_m_bar, use_container_width=True)
+                    
+                    # PERBAIKAN: Menggunakan width="stretch"
+                    st.plotly_chart(fig_m_bar, width="stretch")
                     
                 c_val = df_musim[df_musim["Direction"] == "CALM"]["Total"].mean()
                 try:
-                    dom_wind_dir = df_g_musim.groupby("Sektor_Deskriptif")["Total"].mean().idxmax()
-                    dom_wind_val = df_g_musim.groupby("Sektor_Deskriptif")["Total"].mean().max()
-                    render_icao_interpretation(
-                        f"Sirkulasi Angin Musim {pilihan_musim.split(' ')[0]}",
-                        f"Arah angin dominan bertiup dari sektor <b>{dom_wind_dir}</b> dengan probabilitas <b>{dom_wind_val:.1f}%</b>. Kondisi angin tenang (<i>Calm Wind</i> < 1 Knot) tercatat sebesar <b>{c_val:.2f}%</b>, menunjukkan variabilitas termal lokal yang signifikan pada pagi hari.",
-                        f"Sektor dominan ini menentukan penentuan arah lepas landas dan pendaratan (<i>Runway in Use</i>) untuk meminimalkan komponen angin silang (<i>Crosswind</i>) atau angin ekor (<i>Tailwind</i>) melebihi limitasi 15 knot sesuai ICAO Annex 14."
-                    )
-                except Exception: pass
+                    mean_wind_series = df_g_musim.groupby("Sektor_Deskriptif")["Total"].mean().dropna()
+                    if not mean_wind_series.empty:
+                        dom_wind_dir = mean_wind_series.idxmax()
+                        dom_wind_val = mean_wind_series.max()
+                        render_icao_interpretation(
+                            f"Sirkulasi Angin Musim {pilihan_musim.split(' ')[0]}",
+                            f"Arah angin dominan bertiup dari sektor <b>{dom_wind_dir}</b> dengan probabilitas <b>{dom_wind_val:.1f}%</b>. Kondisi angin tenang (<i>Calm Wind</i> < 1 Knot) tercatat sebesar <b>{c_val:.2f}%</b>, menunjukkan variabilitas termal lokal yang signifikan pada pagi hari.",
+                            f"Sektor dominan ini menentukan penentuan arah lepas landas dan pendaratan (<i>Runway in Use</i>) untuk meminimalkan komponen angin silang (<i>Crosswind</i>) atau angin ekor (<i>Tailwind</i>) melebihi limitasi 15 knot sesuai ICAO Annex 14."
+                        )
+                except Exception: 
+                    pass
             else:
                 st.warning("⚠️ Data untuk sirkulasi musim ini tidak ditemukan pada berkas Excel Anda.")
