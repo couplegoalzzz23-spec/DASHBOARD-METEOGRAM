@@ -1,9 +1,44 @@
 import os
+import gc
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+# ==========================================
+# 0. AUTO-CONFIG & SYSTEM ENVIRONMENT SETUP
+# (Menyisipkan konfigurasi config.toml langsung ke dalam skrip)
+# ==========================================
+def setup_streamlit_config():
+    # 1. Injeksi Environment Variables untuk mematikan Watchdog C-extension
+    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
+    os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
+    os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
+    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
+    
+    # 2. Pembuatan otomatis folder .streamlit dan file config.toml jika belum ada
+    config_dir = os.path.join(os.getcwd(), ".streamlit")
+    config_path = os.path.join(config_dir, "config.toml")
+    
+    if not os.path.exists(config_path):
+        try:
+            os.makedirs(config_dir, exist_ok=True)
+            toml_content = """[server]
+fileWatcherType = "none"
+headless = true
+runOnSave = false
+
+[browser]
+gatherUsageStats = false
+"""
+            with open(config_path, "w", encoding="utf-8") as f:
+                f.write(toml_content.strip())
+        except Exception:
+            pass # Mengabaikan error jika server berjalan dalam mode read-only statis
+
+# Jalankan setup sebelum komponen antarmuka Streamlit di-load
+setup_streamlit_config()
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN & ANTARMUKA (UI)
@@ -29,8 +64,8 @@ st.markdown("""
         div[data-testid="stMetricValue"] { color: #0B3C5D; font-size: 24px; font-weight: bold; }
         .stAlert { border-radius: 8px; }
         .wmo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .wmo-table th { background-color: #0B3C5D; color: white; padding: 6px; text-align: left; }
-        .wmo-table td { padding: 6px; border-bottom: 1px solid #ddd; }
+        .wmo-table th { background-color: #0B3C5D; color: white; padding: 8px; text-align: left; }
+        .wmo-table td { padding: 8px; border-bottom: 1px solid #ddd; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -72,7 +107,7 @@ SEKTOR_DETIL_MAP = {
 }
 
 # ==========================================
-# 2. DATA PROCESSING ENGINE (ROBUST PARSERS)
+# 2. DATA PROCESSING ENGINE (ROBUST & SAFE MEMORY)
 # ==========================================
 def clean_num_str(val):
     if pd.isna(val): return ""
@@ -175,6 +210,7 @@ def load_all_data():
     for key, (filepath, parser) in files.items():
         if os.path.exists(filepath):
             all_sheets = []
+            xls = None
             try:
                 xls = pd.ExcelFile(filepath, engine='openpyxl')
                 for m_idx, m_name in enumerate(MONTHS_ID):
@@ -184,9 +220,16 @@ def load_all_data():
                         if not df_p.empty:
                             df_p["Bulan"], df_p["Bulan_Idx"] = m_name, m_idx + 1
                             all_sheets.append(df_p)
-                if all_sheets: datasets[key] = pd.concat(all_sheets, ignore_index=True)
+                if all_sheets: 
+                    datasets[key] = pd.concat(all_sheets, ignore_index=True)
             except Exception as e:
                 st.sidebar.error(f"⚠️ Gagal load {filepath}: {str(e)}")
+            finally:
+                if xls:
+                    xls.close()
+    
+    # Garbage collection untuk membebaskan memori RAM server secara aktif
+    gc.collect()
     return datasets
 
 with st.spinner("🔄 Sinkronisasi Basis Data Alfanumerik Klasifikasi WMO..."):
@@ -286,7 +329,7 @@ st.markdown("---")
 if selected_param in ["TempMaxMin", "RH"]:
     df_filtered = filter_df(data[selected_param])
     if df_filtered.empty:
-        st.warning("⚠️ Data kosong pada filter terpilih.")
+        st.warning("⚠️ Data kosong pada filter terpilih. Silakan sesuaikan parameter bulan atau tahun di sidebar.")
     else:
         y_lbl = "Suhu Udara (°C)" if selected_param == "TempMaxMin" else "Kelembapan Relatif (%)"
         cols = ["00", "03", "06", "09", "12", "15", "18", "21", "Daily_Mean", "Max", "Min"]
@@ -299,10 +342,8 @@ if selected_param in ["TempMaxMin", "RH"]:
         fig_line = apply_wmo_style(fig_line, f"Trend Harian Real-Time - {month_choice} ({selected_year})", "Tanggal Pengamatan", y_lbl)
         fig_line.update_layout(xaxis=dict(tickmode="linear", dtick=1, range=[0.5, int(agg_df["Tanggal"].max())+0.5]))
         
-        # PERBAIKAN: Menggunakan width="stretch" menggantikan use_container_width=True
         st.plotly_chart(fig_line, width="stretch")
         
-        # Interpretasi Dinamis TempMaxMin / RH yang Aman dari Error
         try:
             if selected_param == "TempMaxMin" and "Max" in agg_df and "Min" in agg_df:
                 avg_max, avg_min = agg_df["Max"].mean(numeric_only=True), agg_df["Min"].mean(numeric_only=True)
@@ -311,7 +352,7 @@ if selected_param in ["TempMaxMin", "RH"]:
                     render_icao_interpretation(
                         "Suhu Udara Synoptic",
                         f"Rata-rata suhu maksimum mencapai <b>{avg_max:.1f}°C</b> dengan ekstrem tertinggi <b>{ext_max:.1f}°C</b>, sementara rata-rata minimum berada pada <b>{avg_min:.1f}°C</b>. Rentang diurnal ini menunjukkan karakteristik pembentukan lapisan batas atmosfer yang aktif pada siang hari.",
-                        f"Suhu ekstrem {ext_max:.1f}°C meningkatkan *Density Altitude* (penurunan kepadatan udara), yang secara langsung memperpanjang jarak lepas landas (*take-off run*) dan mengurangi daya angkat (*lift*) pesawat."
+                        f"Suhu ekstrem {ext_max:.1f}°C meningkatkan <i>Density Altitude</i> (penurunan kepadatan udara), yang secara langsung memperpanjang jarak lepas landas (<i>take-off run</i>) dan mengurangi daya angkat (<i>lift</i>) pesawat."
                     )
             elif selected_param == "RH":
                 avg_rh = agg_df["Daily_Mean"].mean(numeric_only=True) if "Daily_Mean" in agg_df else agg_df.mean(numeric_only=True).mean()
@@ -319,15 +360,15 @@ if selected_param in ["TempMaxMin", "RH"]:
                     render_icao_interpretation(
                         "Kelembapan Relatif (RH)",
                         f"Kelembapan relatif rata-rata harian berada pada level <b>{avg_rh:.1f}%</b>. Pola saturasi tertinggi konsisten terjadi pada pengamatan dini hari (21.00 - 00.00 UTC / 04.00 - 07.00 WIB) akibat pendinginan radiatif permukaan.",
-                        "Kelembapan tinggi (>85%) pada dini/pagi hari memicu probabilitas tinggi pembentukan kabut radiasi (*radiation fog*) dan embun, yang berpotensi menurunkan *Runway Visual Range* (RVR) di bawah batas minimum VFR."
+                        "Kelembapan tinggi (>85%) pada dini/pagi hari memicu probabilitas tinggi pembentukan kabut radiasi (<i>radiation fog</i>) dan embun, yang berpotensi menurunkan <i>Runway Visual Range</i> (RVR) di bawah batas minimum VFR."
                     )
-        except Exception as e: 
+        except Exception: 
             pass
 
 elif selected_param in ["TempFreq", "Vis", "HS"]:
     df_filtered = filter_df(data[selected_param])
     if df_filtered.empty:
-        st.warning("⚠️ Data tidak ditemukan untuk filter ini.")
+        st.warning("⚠️ Data tidak ditemukan untuk filter ini. Silakan sesuaikan parameter bulan atau tahun di sidebar.")
     else:
         if selected_param == "TempFreq":
             cols = ["5 - 0", "0 - 5", "5 - 10", "10 - 15", "15 - 20", "20 - 25", "25 - 30", "30 - 35", "> 35"]
@@ -348,10 +389,8 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
         fig_freq = apply_wmo_style(fig_freq, f"Pola Distribusi Per Jam Observasi (UTC) - {month_choice}", "Jam Synoptic (UTC)", y_lbl)
         fig_freq.update_layout(xaxis=dict(tickmode="linear", dtick=3))
         
-        # PERBAIKAN: Menggunakan width="stretch"
         st.plotly_chart(fig_freq, width="stretch")
         
-        # Interpretasi Dinamis yang Kebal Null/Empty
         try:
             mean_series = hm_df.groupby("Kategori Batas")["Persentase"].mean().dropna()
             if not mean_series.empty:
@@ -361,7 +400,7 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
                     render_icao_interpretation(
                         "Distribusi Frekuensi Suhu",
                         f"Distribusi termal paling dominan berada pada rentang suhu <b>{dom_cat} °C</b> dengan frekuensi kemunculan rata-rata <b>{dom_val:.1f}%</b> di seluruh jam pengamatan synoptic.",
-                        "Konsentrasi frekuensi pada suhu >30°C menuntut kewaspadaan terhadap *heat stress* pada kru *flightline* serta penurunan daya dorong (*thrust*) mesin turbin pesawat."
+                        "Konsentrasi frekuensi pada suhu >30°C menuntut kewaspadaan terhadap <i>heat stress</i> pada kru <i>flightline</i> serta penurunan daya dorong (<i>thrust</i>) mesin turbin pesawat."
                     )
                 elif selected_param == "Vis":
                     vis_low = hm_df[hm_df["Kategori Batas"].isin(["<200", "<400", "<600", "<800", "<1500"])]["Persentase"].mean()
@@ -374,7 +413,7 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
                     render_icao_interpretation(
                         "Tinggi Dasar Awan / HS",
                         f"Frekuensi kejadian dasar awan terendah didominasi oleh rentang <b>{dom_cat} FT</b> dengan rata-rata probabilitas <b>{dom_val:.1f}%</b>.",
-                        "Tinggi dasar awan di bawah 1500 FT (khususnya <1000 FT) masuk dalam parameter *Instrument Meteorological Conditions* (IMC), yang membutuhkan kesiapan sistem pemandu pendaratan instrumen (ILS/VOR)."
+                        "Tinggi dasar awan di bawah 1500 FT (khususnya <1000 FT) masuk dalam parameter <i>Instrument Meteorological Conditions</i> (IMC), yang membutuhkan kesiapan sistem pemandu pendaratan instrumen (ILS/VOR)."
                     )
         except Exception: 
             pass
@@ -389,7 +428,6 @@ elif selected_param == "Wind":
         with tab_rose:
             fig_rose = create_wind_rose_figure(df_w, f"Mawar Angin Standar Penerbangan - {month_choice} ({selected_year})")
             if fig_rose: 
-                # PERBAIKAN: Menggunakan width="stretch"
                 st.plotly_chart(fig_rose, width="stretch")
             else: 
                 st.info("💡 Tidak ada komponen angin terdeteksi selain data CALM/VARIABLE.")
@@ -420,7 +458,6 @@ elif selected_param == "Wind":
                 with col_r:
                     fig_rm = create_wind_rose_figure(df_musim, f"Wind Rose Profil Musim {pilihan_musim.split(' ')[0]}")
                     if fig_rm: 
-                        # PERBAIKAN: Menggunakan width="stretch"
                         st.plotly_chart(fig_rm, width="stretch")
                     
                 with col_b:
@@ -435,7 +472,6 @@ elif selected_param == "Wind":
                     fig_m_bar = apply_wmo_style(fig_m_bar, f"Variabilitas Bulanan Sektor WMO 3600 ({pilihan_musim.split(' ')[0]})", "Sektor Arah Angin & Sudut Kompas WMO 3600", "Persentase Kejadian / Frekuensi (%)")
                     fig_m_bar.update_xaxes(type="category", categoryorder="array", categoryarray=list(SEKTOR_DETIL_MAP.values()))
                     
-                    # PERBAIKAN: Menggunakan width="stretch"
                     st.plotly_chart(fig_m_bar, width="stretch")
                     
                 c_val = df_musim[df_musim["Direction"] == "CALM"]["Total"].mean()
@@ -444,10 +480,11 @@ elif selected_param == "Wind":
                     if not mean_wind_series.empty:
                         dom_wind_dir = mean_wind_series.idxmax()
                         dom_wind_val = mean_wind_series.max()
+                        c_val_str = f"{c_val:.2f}%" if pd.notna(c_val) else "0.00%"
                         render_icao_interpretation(
                             f"Sirkulasi Angin Musim {pilihan_musim.split(' ')[0]}",
-                            f"Arah angin dominan bertiup dari sektor <b>{dom_wind_dir}</b> dengan probabilitas <b>{dom_wind_val:.1f}%</b>. Kondisi angin tenang (<i>Calm Wind</i> < 1 Knot) tercatat sebesar <b>{c_val:.2f}%</b>, menunjukkan variabilitas termal lokal yang signifikan pada pagi hari.",
-                            f"Sektor dominan ini menentukan penentuan arah lepas landas dan pendaratan (<i>Runway in Use</i>) untuk meminimalkan komponen angin silang (<i>Crosswind</i>) atau angin ekor (<i>Tailwind</i>) melebihi limitasi 15 knot sesuai ICAO Annex 14."
+                            f"Arah angin dominan bertiup dari sektor <b>{dom_wind_dir}</b> dengan probabilitas <b>{dom_wind_val:.1f}%</b>. Kondisi angin tenang (<i>Calm Wind</i> < 1 Knot) tercatat sebesar <b>{c_val_str}</b>, menunjukkan variabilitas termal lokal yang signifikan pada pagi hari.",
+                            "Sektor dominan ini menentukan penentuan arah lepas landas dan pendaratan (<i>Runway in Use</i>) untuk meminimalkan komponen angin silang (<i>Crosswind</i>) atau angin ekor (<i>Tailwind</i>) melebihi limitasi 15 knot sesuai ICAO Annex 14."
                         )
                 except Exception: 
                     pass
