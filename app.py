@@ -7,40 +7,6 @@ import plotly.graph_objects as go
 import streamlit as st
 
 # ==========================================
-# 0. AUTO-CONFIG & SYSTEM ENVIRONMENT SETUP
-# (Menyisipkan konfigurasi config.toml langsung ke dalam skrip)
-# ==========================================
-def setup_streamlit_config():
-    # 1. Injeksi Environment Variables untuk mematikan Watchdog C-extension
-    os.environ["STREAMLIT_SERVER_FILE_WATCHER_TYPE"] = "none"
-    os.environ["STREAMLIT_SERVER_HEADLESS"] = "true"
-    os.environ["STREAMLIT_SERVER_RUN_ON_SAVE"] = "false"
-    os.environ["STREAMLIT_BROWSER_GATHER_USAGE_STATS"] = "false"
-    
-    # 2. Pembuatan otomatis folder .streamlit dan file config.toml jika belum ada
-    config_dir = os.path.join(os.getcwd(), ".streamlit")
-    config_path = os.path.join(config_dir, "config.toml")
-    
-    if not os.path.exists(config_path):
-        try:
-            os.makedirs(config_dir, exist_ok=True)
-            toml_content = """[server]
-fileWatcherType = "none"
-headless = true
-runOnSave = false
-
-[browser]
-gatherUsageStats = false
-"""
-            with open(config_path, "w", encoding="utf-8") as f:
-                f.write(toml_content.strip())
-        except Exception:
-            pass # Mengabaikan error jika server berjalan dalam mode read-only statis
-
-# Jalankan setup sebelum komponen antarmuka Streamlit di-load
-setup_streamlit_config()
-
-# ==========================================
 # 1. KONFIGURASI HALAMAN & ANTARMUKA (UI)
 # ==========================================
 st.set_page_config(
@@ -50,7 +16,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling untuk Atribut BMKG & Kenyamanan Visual Operasional
 st.markdown("""
     <style>
         .main .block-container { padding-top: 1.5rem; padding-bottom: 2rem; }
@@ -69,13 +34,10 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Palet Warna Spektrum Kontras Tinggi (Anti-Bias Visual)
 PALET_KATEGORI = ["#0074D9", "#FF4136", "#2ECC40", "#FF851B", "#B10DC9", "#FFDC00", "#39CCCC", "#F012BE"]
 PALET_MUSIM_BAR = ["#4B0082", "#00A86B", "#007FFF", "#FF8C00"]
-
 MONTHS_ID = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
 
-# Pemetaan Monsun & Zonasi Musim Standar BMKG/WMO
 MUSIM_MAP = {
     "Desember": "DJF (Desember - Januari - Februari) | Monsun Asia / Musim Hujan",
     "Januari": "DJF (Desember - Januari - Februari) | Monsun Asia / Musim Hujan",
@@ -107,7 +69,7 @@ SEKTOR_DETIL_MAP = {
 }
 
 # ==========================================
-# 2. DATA PROCESSING ENGINE (ROBUST & SAFE MEMORY)
+# 2. DATA PROCESSING ENGINE
 # ==========================================
 def clean_num_str(val):
     if pd.isna(val): return ""
@@ -228,7 +190,6 @@ def load_all_data():
                 if xls:
                     xls.close()
     
-    # Garbage collection untuk membebaskan memori RAM server secara aktif
     gc.collect()
     return datasets
 
@@ -304,7 +265,6 @@ def create_wind_rose_figure(rose_df, title_text):
     )
     return fig_polar
 
-# Modul Kotak Interpretasi Standar ICAO/WMO/BMKG
 def render_icao_interpretation(title, content, highlight):
     st.markdown(f"""
         <div style="background-color: #F8F9FA; border: 1px solid #E9ECEF; border-left: 5px solid #0074D9; padding: 16px 20px; border-radius: 8px; margin-top: 15px; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
