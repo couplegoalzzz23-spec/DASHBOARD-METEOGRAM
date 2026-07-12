@@ -193,7 +193,7 @@ st.sidebar.markdown("---")
 param_options = {
     "TempMaxMin": "1. Suhu Udara Synoptic (°C)", "TempFreq": "2. Distribusi Frekuensi Suhu (%)",
     "RH": "3. Kelembapan Relatif / RH (%)", "Vis": "4. Jarak Pandang / Visibility (%)",
-    "HS": "5. Cloud Ceiling / Tinggi Awan (%)", "Wind": "6. Sirkulasi Wind & Analisis Monsun"
+    "HS": "5. HS / Tinggi Dasar Awan (%)", "Wind": "6. Sirkulasi Wind & Analisis Monsun"
 }
 selected_param = st.sidebar.selectbox("Parameter Meteorologi:", list(param_options.keys()), format_func=lambda x: param_options[x])
 month_choice = st.sidebar.selectbox("Filter Analisis Bulan:", ["Semua Bulan"] + MONTHS_ID)
@@ -358,7 +358,7 @@ elif selected_param in ["TempFreq", "Vis", "HS"]:
                 )
             else:
                 render_icao_interpretation(
-                    "Tinggi Dasar Awan / Cloud Ceiling",
+                    "Tinggi Dasar Awan / HS",
                     f"Frekuensi kejadian dasar awan terendah didominasi oleh rentang <b>{dom_cat} FT</b> dengan rata-rata probabilitas <b>{dom_val:.1f}%</b>.",
                     "Tinggi dasar awan di bawah 1500 FT (khususnya <1000 FT) masuk dalam parameter *Instrument Meteorological Conditions* (IMC), yang membutuhkan kesiapan sistem pemandu pendaratan instrumen (ILS/VOR)."
                 )
