@@ -220,9 +220,12 @@ def parse_hourly_freq(df, col_names):
                 continue
             v0, v1 = int(val0), int(val1)
             rest_vals = [str(x).replace(',', '.') if pd.notna(x) else np.nan for x in row.iloc[2:].values]
-            if 0 <= v0 <= 23 and 2000 <= v1 <= 2100:
+            # Validasi jam UTC (0-23) dan konversi jika ada rekam medik yang menulis jam 24 sebagai 00 UTC
+            if (0 <= v0 <= 24) and (2000 <= v1 <= 2100):
+                if v0 == 24: v0 = 0
                 valid_data.append([v1, v0] + rest_vals)
-            elif 2000 <= v0 <= 2100 and 0 <= v1 <= 23:
+            elif (2000 <= v0 <= 2100) and (0 <= v1 <= 24):
+                if v1 == 24: v1 = 0
                 valid_data.append([v0, v1] + rest_vals)
         except Exception:
             continue
@@ -370,8 +373,12 @@ def create_wind_rose_figure(rose_df, title_text):
     if df_clean.empty: return None
     
     df_clean["Arah Mata Angin"] = df_clean["Direction"].map(dir_map)
+    df_clean = df_clean.dropna(subset=["Arah Mata Angin"]) # Pengaman error pada pemetaan
+    if df_clean.empty: return None
+    
     speeds = ["1-5", "6-10", "11-15", "16-20", "21-25", "26-30", "31-35", "36-45", ">45"]
     avail_speeds = [s for s in speeds if s in df_clean.columns]
+    if not avail_speeds: return None
     
     melt_rose = df_clean.melt(id_vars=["Arah Mata Angin"], value_vars=avail_speeds, var_name="Kecepatan (Knot)", value_name="Frekuensi (%)")
     agg_rose = melt_rose.groupby(["Arah Mata Angin", "Kecepatan (Knot)"])["Frekuensi (%)"].mean(numeric_only=True).reset_index()
@@ -412,7 +419,6 @@ def create_wind_rose_figure(rose_df, title_text):
     return fig_polar
 
 def render_icao_interpretation(title, content, highlight):
-    # Dynamic styling for dark/light mode
     bg_div = "#16202B" if is_dark else "#F8F9FA"
     text_div = "#E2E8F0" if is_dark else "#0F1116"
     title_div = "#60A5FA" if is_dark else "#0B3C5D"
@@ -490,9 +496,12 @@ else:
             melted = agg_df.melt(id_vars="Tanggal", value_vars=avail_cols, var_name="Jam / Indikator", value_name="Nilai")
             
             fig_line = px.line(melted, x="Tanggal", y="Nilai", color="Jam / Indikator", markers=True, color_discrete_sequence=PALET_KATEGORI)
-            fig_line.update_traces(line=dict(width=2), marker=dict(size=6), hovertemplate="<b>%{y:.1f}</b>")
+            fig_line.update_traces(line=dict(width=2), marker=dict(size=6), hovertemplate="<b>Tanggal %{x}</b><br>Nilai: <b>%{y:.1f}</b><extra></extra>")
             fig_line = apply_wmo_style(fig_line, f"Trend Harian Real-Time - {month_choice} ({selected_year})", "Tanggal Pengamatan", y_lbl)
-            fig_line.update_layout(xaxis=dict(tickmode="linear", dtick=1, range=[0.5, int(agg_df["Tanggal"].max())+0.5]))
+            
+            # Pengaman batas maksimum tanggal agar presisi
+            max_tgl = int(agg_df["Tanggal"].max()) if not agg_df["Tanggal"].empty and pd.notna(agg_df["Tanggal"].max()) else 31
+            fig_line.update_layout(xaxis=dict(tickmode="linear", dtick=1, range=[0.5, max_tgl + 0.5]))
             
             st.plotly_chart(fig_line, width="stretch", theme=None)
             
@@ -533,13 +542,24 @@ else:
                 y_lbl = "Persentase Tinggi Dasar Awan (%)"
                 
             avail_cols = [c for c in cols if c in df_filtered.columns]
-            agg_v = df_filtered.groupby("Jam")[avail_cols].mean(numeric_only=True).reset_index().sort_values("Jam")
+            # Validasi & filter ketat untuk memastikan jam UTC berada eksklusif di rentang 0 - 23
+            agg_v = df_filtered[df_filtered["Jam"] <= 23].groupby("Jam")[avail_cols].mean(numeric_only=True).reset_index().sort_values("Jam")
             hm_df = agg_v.melt(id_vars="Jam", value_vars=avail_cols, var_name="Kategori Batas", value_name="Persentase")
             
             fig_freq = px.line(hm_df, x="Jam", y="Persentase", color="Kategori Batas", markers=True, color_discrete_sequence=PALET_KATEGORI)
-            fig_freq.update_traces(line=dict(width=2.5), marker=dict(size=7), hovertemplate="<b>%{y:.2f}%</b>")
+            fig_freq.update_traces(line=dict(width=2.5), marker=dict(size=7), hovertemplate="<b>Jam %{x:02d} UTC</b><br>Persentase: <b>%{y:.2f}%</b><extra></extra>")
             fig_freq = apply_wmo_style(fig_freq, f"Pola Distribusi Per Jam Observasi (UTC) - {month_choice}", "Jam Synoptic (UTC)", y_lbl)
-            fig_freq.update_layout(xaxis=dict(tickmode="linear", dtick=3))
+            
+            # SOLUSI INTI: Penguncian sumbu X secara presisi untuk mengeliminasi munculnya angka jam 24
+            fig_freq.update_layout(
+                xaxis=dict(
+                    tickmode="array",
+                    tickvals=[0, 3, 6, 9, 12, 15, 18, 21],
+                    ticktext=["00", "03", "06", "09", "12", "15", "18", "21"],
+                    range=[-0.5, 23.5],
+                    zeroline=False
+                )
+            )
             
             st.plotly_chart(fig_freq, width="stretch", theme=None)
             
