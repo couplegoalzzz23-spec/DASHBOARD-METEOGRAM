@@ -202,7 +202,7 @@ with st.spinner("🔄 Sinkronisasi Basis Data..."):
 # ==========================================
 # 3. SIDEBAR NAVIGATION CONTROLS
 # ==========================================
-st.sidebar.markdown("### 🧭 Panel Kendali Klimatologi")
+st.sidebar.markdown("### 🧭 Panel Control")
 st.sidebar.markdown("---")
 param_options = {
     "Home": "🏠 Beranda Utama",
