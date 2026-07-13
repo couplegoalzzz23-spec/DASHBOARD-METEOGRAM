@@ -20,21 +20,57 @@ st.set_page_config(
 theme_mode = st.sidebar.radio("🌓 Mode Tampilan:", ["Dark Mode", "Light Mode"], horizontal=True)
 is_dark = theme_mode == "Dark Mode"
 
-# Warna Dinamis Berdasarkan Tema
+# Warna Dinamis Berdasarkan Tema untuk Keseluruhan Aplikasi
 bg_color_main = "#0E1117" if is_dark else "#FFFFFF"
 text_color_main = "#FAFAFA" if is_dark else "#0F1116"
-panel_bg = "#1E2A38" if is_dark else "#F8F9FA"
-border_col = "#334155" if is_dark else "#E9ECEF"
+panel_bg = "#161B22" if is_dark else "#F0F2F6"
+border_col = "#334155" if is_dark else "#CBD5E1"
 chart_template = "plotly_dark" if is_dark else "plotly_white"
 
+# Injeksi CSS Global untuk Menimpa Tampilan Keseluruhan Streamlit
 st.markdown(f"""
     <style>
+        /* Mengubah warna background utama dan teks */
+        .stApp, .main {{
+            background-color: {bg_color_main} !important;
+            color: {text_color_main} !important;
+        }}
+        
+        /* Mengubah warna background panel Sidebar */
+        section[data-testid="stSidebar"] {{
+            background-color: {panel_bg} !important;
+            border-right: 1px solid {border_col} !important;
+        }}
+        
+        /* Menyesuaikan warna seluruh teks pada Sidebar */
+        section[data-testid="stSidebar"] * {{
+            color: {text_color_main} !important;
+        }}
+        
+        /* Menyesuaikan warna Header / Top bar aplikasi */
+        header[data-testid="stHeader"] {{
+            background-color: transparent !important;
+        }}
+        
+        /* Padding container utama */
         .main .block-container {{ padding-top: 1.5rem; padding-bottom: 2rem; }}
+        
+        /* Penyesuaian metrik dan alert */
         div[data-testid="stMetricValue"] {{ color: #0B3C5D; font-size: 24px; font-weight: bold; }}
         .stAlert {{ border-radius: 8px; }}
+        
+        /* Tabel Custom WMO */
         .wmo-table {{ width: 100%; border-collapse: collapse; font-size: 13px; color: {text_color_main}; }}
-        .wmo-table th {{ background-color: #0B3C5D; color: white; padding: 8px; text-align: left; border: 1px solid #334155; }}
+        .wmo-table th {{ background-color: #0B3C5D; color: white; padding: 8px; text-align: left; border: 1px solid {border_col}; }}
         .wmo-table td {{ padding: 8px; border-bottom: 1px solid {border_col}; border-left: 1px solid {border_col}; border-right: 1px solid {border_col}; }}
+        
+        /* Menyesuaikan warna teks pada widget input (select box, radio, tab) */
+        div[data-baseweb="select"] > div, div[data-baseweb="select"] * {{
+            color: {text_color_main} !important;
+        }}
+        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {{
+            color: {text_color_main} !important;
+        }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -289,7 +325,7 @@ def render_icao_interpretation(title, content, highlight):
     text_div = "#E2E8F0" if is_dark else "#2C3E50"
     title_div = "#60A5FA" if is_dark else "#0B3C5D"
     border_left = "#3B82F6" if is_dark else "#0074D9"
-    border_div = "#334155" if is_dark else "#E9ECEF"
+    border_div = "#334155" if is_dark else "#CBD5E1"
     warn_text = "#F87171" if is_dark else "#D9534F"
     dash_col = "#475569" if is_dark else "#CBD5E1"
     
