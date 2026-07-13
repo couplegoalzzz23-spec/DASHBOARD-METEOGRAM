@@ -325,7 +325,7 @@ if selected_param == "Home":
                     margin-bottom: 30px;">
             <h1 style="margin: 0; font-size: 38px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;">Sistem Informasi Meteorologi Penerbangan</h1>
             <p style="margin: 12px 0 20px 0; font-size: 18px; font-weight: 300; letter-spacing: 0.5px; opacity: 0.95;">
-                Pusat Analisis Data Klimatologi Taktis & Dukungan Keselamatan Operasi Udara
+                 Analisis Data Meteorologi Taktis & Dukungan Keselamatan Operasi Udara
             </p>
             <hr style="border-top: 1px solid rgba(255,255,255,0.2); width: 60%; margin: auto;">
             <p style="margin-top: 25px; font-size: 16px; font-weight: 400; font-style: italic; color: #F1C40F;">
