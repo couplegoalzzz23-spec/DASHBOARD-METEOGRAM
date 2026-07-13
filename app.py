@@ -23,31 +23,33 @@ is_dark = theme_mode == "Dark Mode"
 # Warna Dinamis Berdasarkan Tema untuk Keseluruhan Aplikasi
 bg_color_main = "#0E1117" if is_dark else "#FFFFFF"
 text_color_main = "#FAFAFA" if is_dark else "#0F1116"
-panel_bg = "#161B22" if is_dark else "#F0F2F6"
+panel_bg = "#161B22" if is_dark else "#F1F5F9"
 border_col = "#334155" if is_dark else "#CBD5E1"
 chart_template = "plotly_dark" if is_dark else "plotly_white"
 
-# Injeksi CSS Global untuk Menimpa Tampilan Keseluruhan Streamlit
+# Warna Khusus Widget & Kontras Tambahan untuk Mengatasi Blur/Gelap di Light Mode
+input_bg = "#1E293B" if is_dark else "#FFFFFF"
+hover_bg = "#334155" if is_dark else "#E2E8F0"
+
+# Injeksi CSS Global untuk Menimpa Tampilan Keseluruhan Streamlit secara Presisi
 st.markdown(f"""
     <style>
-        /* Mengubah warna background utama dan teks */
-        .stApp, .main {{
+        /* 1. Reset Warna Background Utama dan Teks */
+        .stApp, .main, .block-container {{
             background-color: {bg_color_main} !important;
             color: {text_color_main} !important;
         }}
         
-        /* Mengubah warna background panel Sidebar */
+        /* 2. Mengubah Warna Background & Border Sidebar */
         section[data-testid="stSidebar"] {{
             background-color: {panel_bg} !important;
             border-right: 1px solid {border_col} !important;
         }}
-        
-        /* Menyesuaikan warna seluruh teks pada Sidebar */
-        section[data-testid="stSidebar"] * {{
+        section[data-testid="stSidebar"] *, section[data-testid="stSidebar"] p, section[data-testid="stSidebar"] span, section[data-testid="stSidebar"] label {{
             color: {text_color_main} !important;
         }}
         
-        /* Menyesuaikan warna Header / Top bar aplikasi */
+        /* 3. Menyesuaikan Header / Top bar Aplikasi */
         header[data-testid="stHeader"] {{
             background-color: transparent !important;
         }}
@@ -55,20 +57,88 @@ st.markdown(f"""
         /* Padding container utama */
         .main .block-container {{ padding-top: 1.5rem; padding-bottom: 2rem; }}
         
-        /* Penyesuaian metrik dan alert */
-        div[data-testid="stMetricValue"] {{ color: #0B3C5D; font-size: 24px; font-weight: bold; }}
+        /* 4. Penyesuaian Metrik & Alert */
+        div[data-testid="stMetricValue"] {{ color: #0B3C5D !important; font-size: 24px; font-weight: bold; }}
         .stAlert {{ border-radius: 8px; }}
         
-        /* Tabel Custom WMO */
+        /* 5. Tabel Custom WMO */
         .wmo-table {{ width: 100%; border-collapse: collapse; font-size: 13px; color: {text_color_main}; }}
         .wmo-table th {{ background-color: #0B3C5D; color: white; padding: 8px; text-align: left; border: 1px solid {border_col}; }}
-        .wmo-table td {{ padding: 8px; border-bottom: 1px solid {border_col}; border-left: 1px solid {border_col}; border-right: 1px solid {border_col}; }}
+        .wmo-table td {{ padding: 8px; border-bottom: 1px solid {border_col}; border-left: 1px solid {border_col}; border-right: 1px solid {border_col}; background-color: {bg_color_main}; color: {text_color_main}; }}
+        .wmo-table tr:nth-child(even) td {{ background-color: {panel_bg}; }}
         
-        /* Menyesuaikan warna teks pada widget input (select box, radio, tab) */
-        div[data-baseweb="select"] > div, div[data-baseweb="select"] * {{
+        /* 6. PERBAIKAN TOTAL WIDGET SELECTBOX, INPUT, & POPUP MENU (Mengatasi Tulisan Gelap di Mode Light) */
+        div[data-baseweb="select"] > div {{
+            background-color: {input_bg} !important;
+            border: 1px solid {border_col} !important;
             color: {text_color_main} !important;
         }}
-        .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {{
+        div[data-baseweb="select"] > div * {{
+            color: {text_color_main} !important;
+        }}
+        /* Dropdown Menu Popup (List Pilihan Saat Diklik) */
+        ul[data-baseweb="menu"], div[data-baseweb="popover"], div[data-baseweb="popover"] > div {{
+            background-color: {input_bg} !important;
+            border: 1px solid {border_col} !important;
+        }}
+        ul[data-baseweb="menu"] li {{
+            background-color: {input_bg} !important;
+            color: {text_color_main} !important;
+        }}
+        ul[data-baseweb="menu"] li * {{
+            color: {text_color_main} !important;
+        }}
+        ul[data-baseweb="menu"] li:hover, ul[data-baseweb="menu"] li:hover * {{
+            background-color: {hover_bg} !important;
+            color: {text_color_main} !important;
+        }}
+        
+        /* 7. PERBAIKAN TABS STREAMLIT */
+        .stTabs [data-baseweb="tab-list"] {{
+            border-bottom: 2px solid {border_col} !important;
+            gap: 8px;
+        }}
+        .stTabs [data-baseweb="tab"] {{
+            background-color: {panel_bg} !important;
+            border: 1px solid {border_col} !important;
+            border-bottom: none !important;
+            border-radius: 6px 6px 0 0 !important;
+            padding: 8px 16px !important;
+        }}
+        .stTabs [data-baseweb="tab"] * {{
+            color: {text_color_main} !important;
+            opacity: 0.8 !important;
+            font-weight: 600 !important;
+        }}
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+            background-color: {bg_color_main} !important;
+            border-top: 3px solid #0074D9 !important;
+        }}
+        .stTabs [data-baseweb="tab"][aria-selected="true"] * {{
+            color: #0074D9 !important;
+            opacity: 1 !important;
+            font-weight: bold !important;
+        }}
+        
+        /* 8. PERBAIKAN EXPANDER */
+        div[data-testid="stExpander"] {{
+            background-color: {panel_bg} !important;
+            border: 1px solid {border_col} !important;
+            border-radius: 8px !important;
+        }}
+        div[data-testid="stExpander"] summary, div[data-testid="stExpander"] summary * {{
+            color: {text_color_main} !important;
+            font-weight: 600 !important;
+        }}
+        div[data-testid="stExpanderDetails"] {{
+            background-color: {bg_color_main} !important;
+            color: {text_color_main} !important;
+            border-top: 1px solid {border_col} !important;
+        }}
+        
+        /* 9. Memastikan Teks Umum, Label Widget, & Keterangan Selalu Terbaca Jelas */
+        label[data-testid="stWidgetLabel"] p, label[data-testid="stWidgetLabel"] span,
+        div[data-testid="stMarkdownContainer"] p, .stMarkdown p, .stText {{
             color: {text_color_main} !important;
         }}
     </style>
@@ -268,26 +338,30 @@ def filter_df(df, ignore_month=False):
 # 4. TATA LETAK GRAFIK & FUNGSI BANTU
 # ==========================================
 def apply_wmo_style(fig, title_text, x_label, y_label):
-    grid_col = "rgba(255,255,255,0.2)" if is_dark else "rgba(211,211,211,0.5)"
+    grid_col = "rgba(255,255,255,0.2)" if is_dark else "rgba(0,0,0,0.15)"
     font_col = "#60A5FA" if is_dark else "#0B3C5D"
-    legend_bg = "rgba(14,17,23,0.85)" if is_dark else "rgba(255, 255, 255, 0.85)"
+    text_col = "#FAFAFA" if is_dark else "#0F1116"
+    legend_bg = "rgba(14,17,23,0.85)" if is_dark else "rgba(255, 255, 255, 0.9)"
     
     fig.update_layout(
         title=dict(text=f"<b>{title_text}</b>", font=dict(size=17, color=font_col)),
-        xaxis_title=f"<b>{x_label}</b>", yaxis_title=f"<b>{y_label}</b>",
+        xaxis_title=dict(text=f"<b>{x_label}</b>", font=dict(color=text_col, size=14)),
+        yaxis_title=dict(text=f"<b>{y_label}</b>", font=dict(color=text_col, size=14)),
+        font=dict(color=text_col),
         margin=dict(l=50, r=160, t=70, b=80),
         template=chart_template, 
         hovermode="x unified",
         legend=dict(
-            title="<b>Komponen Data:</b>",
+            title=dict(text="<b>Komponen Data:</b>", font=dict(color=text_col)),
+            font=dict(color=text_col),
             orientation="v", yanchor="top", y=1, xanchor="left", x=1.02,
             bgcolor=legend_bg, bordercolor=grid_col, borderwidth=1
         ),
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)"
     )
-    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor=grid_col)
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor=grid_col)
+    fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor=grid_col, tickfont=dict(color=text_col), title_font=dict(color=text_col), zerolinecolor=grid_col)
+    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor=grid_col, tickfont=dict(color=text_col), title_font=dict(color=text_col), zerolinecolor=grid_col)
     return fig
 
 def create_wind_rose_figure(rose_df, title_text):
@@ -308,13 +382,31 @@ def create_wind_rose_figure(rose_df, title_text):
         category_orders={"Kecepatan (Knot)": speeds}, template=chart_template
     )
     fig_polar = apply_wmo_style(fig_polar, title_text, "", "")
-    grid_col = "rgba(255,255,255,0.2)" if is_dark else "rgba(211,211,211,0.5)"
+    grid_col = "rgba(255,255,255,0.2)" if is_dark else "rgba(0,0,0,0.15)"
+    text_col = "#FAFAFA" if is_dark else "#0F1116"
+    legend_bg = "rgba(14,17,23,0.85)" if is_dark else "rgba(255, 255, 255, 0.9)"
+    
     fig_polar.update_layout(
-        legend=dict(title="<b>Kecepatan (Knot):</b>", orientation="v", yanchor="top", y=1, xanchor="left", x=1.08),
+        font=dict(color=text_col),
+        legend=dict(
+            title=dict(text="<b>Kecepatan (Knot):</b>", font=dict(color=text_col)),
+            font=dict(color=text_col),
+            orientation="v", yanchor="top", y=1, xanchor="left", x=1.08,
+            bgcolor=legend_bg, bordercolor=grid_col, borderwidth=1
+        ),
         polar=dict(
             bgcolor="rgba(0,0,0,0)",
-            angularaxis=dict(direction="clockwise", rotation=90, categoryorder="array", categoryarray=list(dir_map.values())),
-            radialaxis=dict(showgrid=True, gridcolor=grid_col, ticksuffix="%")
+            angularaxis=dict(
+                direction="clockwise", rotation=90, categoryorder="array", 
+                categoryarray=list(dir_map.values()),
+                tickfont=dict(color=text_col, size=12, weight="bold"),
+                gridcolor=grid_col, linecolor=grid_col
+            ),
+            radialaxis=dict(
+                showgrid=True, gridcolor=grid_col, ticksuffix="%",
+                tickfont=dict(color=text_col, size=10),
+                linecolor=grid_col
+            )
         )
     )
     return fig_polar
@@ -322,7 +414,7 @@ def create_wind_rose_figure(rose_df, title_text):
 def render_icao_interpretation(title, content, highlight):
     # Dynamic styling for dark/light mode
     bg_div = "#16202B" if is_dark else "#F8F9FA"
-    text_div = "#E2E8F0" if is_dark else "#2C3E50"
+    text_div = "#E2E8F0" if is_dark else "#0F1116"
     title_div = "#60A5FA" if is_dark else "#0B3C5D"
     border_left = "#3B82F6" if is_dark else "#0074D9"
     border_div = "#334155" if is_dark else "#CBD5E1"
@@ -331,13 +423,13 @@ def render_icao_interpretation(title, content, highlight):
     
     st.markdown(f"""
         <div style="background-color: {bg_div}; border: 1px solid {border_div}; border-left: 5px solid {border_left}; padding: 16px 20px; border-radius: 8px; margin-top: 15px; margin-bottom: 25px; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">
-            <div style="font-size: 14px; font-weight: 700; color: {title_div}; margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 700; color: {title_div} !important; margin-bottom: 8px;">
                 📋 INTERPRETASI KLIMATOLOGIS OPERASIONAL ({title.upper()})
             </div>
-            <div style="font-size: 13.5px; color: {text_div}; line-height: 1.6;">
+            <div style="font-size: 13.5px; color: {text_div} !important; line-height: 1.6;">
                 {content}
             </div>
-            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed {dash_col}; font-size: 13px; color: {warn_text}; font-weight: 600;">
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px dashed {dash_col}; font-size: 13px; color: {warn_text} !important; font-weight: 600;">
                 ⚠️ Dampak Penerbangan (ICAO Annex 3 / BMKG): {highlight}
             </div>
         </div>
@@ -359,12 +451,12 @@ if selected_param == "Home":
                     box-shadow: 0 8px 16px rgba(0,0,0,0.4); 
                     border-bottom: 5px solid #FFD700;
                     margin-bottom: 30px;">
-            <h1 style="margin: 0; font-size: 38px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px;">Sistem Informasi Meteorologi Penerbangan</h1>
-            <p style="margin: 12px 0 20px 0; font-size: 18px; font-weight: 300; letter-spacing: 0.5px; opacity: 0.95;">
+            <h1 style="margin: 0; font-size: 38px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: #FFFFFF !important;">Sistem Informasi Meteorologi Penerbangan</h1>
+            <p style="margin: 12px 0 20px 0; font-size: 18px; font-weight: 300; letter-spacing: 0.5px; opacity: 0.95; color: #FFFFFF !important;">
                  Analisis Data Meteorologi Taktis & Dukungan Keselamatan Operasi Udara
             </p>
             <hr style="border-top: 1px solid rgba(255,255,255,0.2); width: 60%; margin: auto;">
-            <p style="margin-top: 25px; font-size: 16px; font-weight: 400; font-style: italic; color: #F1C40F;">
+            <p style="margin-top: 25px; font-size: 16px; font-weight: 400; font-style: italic; color: #F1C40F !important;">
                 "Swa Bhuwana Paksa"
             </p>
         </div>
@@ -402,7 +494,7 @@ else:
             fig_line = apply_wmo_style(fig_line, f"Trend Harian Real-Time - {month_choice} ({selected_year})", "Tanggal Pengamatan", y_lbl)
             fig_line.update_layout(xaxis=dict(tickmode="linear", dtick=1, range=[0.5, int(agg_df["Tanggal"].max())+0.5]))
             
-            st.plotly_chart(fig_line, width="stretch")
+            st.plotly_chart(fig_line, width="stretch", theme=None)
             
             try:
                 if selected_param == "TempMaxMin" and "Max" in agg_df and "Min" in agg_df:
@@ -449,7 +541,7 @@ else:
             fig_freq = apply_wmo_style(fig_freq, f"Pola Distribusi Per Jam Observasi (UTC) - {month_choice}", "Jam Synoptic (UTC)", y_lbl)
             fig_freq.update_layout(xaxis=dict(tickmode="linear", dtick=3))
             
-            st.plotly_chart(fig_freq, width="stretch")
+            st.plotly_chart(fig_freq, width="stretch", theme=None)
             
             try:
                 mean_series = hm_df.groupby("Kategori Batas")["Persentase"].mean().dropna()
@@ -488,7 +580,7 @@ else:
             with tab_rose:
                 fig_rose = create_wind_rose_figure(df_w, f"Mawar Angin Standar Penerbangan - {month_choice} ({selected_year})")
                 if fig_rose: 
-                    st.plotly_chart(fig_rose, width="stretch")
+                    st.plotly_chart(fig_rose, width="stretch", theme=None)
                 else: 
                     st.info("💡 Tidak ada komponen angin terdeteksi selain data CALM/VARIABLE.")
                 
@@ -518,7 +610,7 @@ else:
                     with col_r:
                         fig_rm = create_wind_rose_figure(df_musim, f"Wind Rose Profil Musim {pilihan_musim.split(' ')[0]}")
                         if fig_rm: 
-                            st.plotly_chart(fig_rm, width="stretch")
+                            st.plotly_chart(fig_rm, width="stretch", theme=None)
                         
                     with col_b:
                         df_g_musim = df_musim[~df_musim["Direction"].isin(["CALM", "VARIABLE"])].groupby(["Direction", "Bulan", "Bulan_Idx"])["Total"].mean(numeric_only=True).reset_index().sort_values("Bulan_Idx")
@@ -532,7 +624,7 @@ else:
                         fig_m_bar = apply_wmo_style(fig_m_bar, f"Variabilitas Bulanan Sektor WMO 3600 ({pilihan_musim.split(' ')[0]})", "Sektor Arah Angin & Sudut Kompas WMO 3600", "Persentase Kejadian / Frekuensi (%)")
                         fig_m_bar.update_xaxes(type="category", categoryorder="array", categoryarray=list(SEKTOR_DETIL_MAP.values()))
                         
-                        st.plotly_chart(fig_m_bar, width="stretch")
+                        st.plotly_chart(fig_m_bar, width="stretch", theme=None)
                         
                     c_val = df_musim[df_musim["Direction"] == "CALM"]["Total"].mean()
                     try:
